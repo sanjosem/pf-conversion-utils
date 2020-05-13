@@ -1,0 +1,30 @@
+# Input data (Required)
+directory: /home/marlene/WK/Suivi_Stahl/data
+
+# this is the name of the surface file to convert (Required)
+snc_filename: curle_frame1700.snc
+
+# Verbosity (information will be displayed during the convertion)
+verbose: False
+casename: airfoil
+
+# these are the name of the patch you want to extract in the surface file
+face_names:
+    airfoil: 
+      - airfoil.DW01
+      - airfoil.DW02
+      - airfoil.UP01
+      - airfoil.UP02
+      - airfoil.TE
+      - trip_wake_suction
+      - trip_wake_pressure
+    
+# Threshold to ignore surface element in triangulation
+surface_min: 5.0e-14
+
+# Output data
+output_directory: /home/marlene/WK/Suivi_Stahl/converted/airfoil
+
+# Instant
+frame:
+  - 0

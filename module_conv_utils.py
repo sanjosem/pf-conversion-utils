@@ -97,7 +97,6 @@ class PFConvertion:
         lx_scales = f.variables['lx_scales'][()]
         param_values = f.variables['param_values'][()]
 
-        print("Computing scaling factors")
         self.params = dict()
         self.params['coeff_dx'] = lx_scales[0]
         self.params['CFL_number'] = lx_scales[-1]
@@ -309,23 +308,21 @@ class PFConvertion:
         face_id=f.variables['face'][()]
         f.close()
         
+        print('Triangulation of \'{0:s}\' surface'.format(surface_name))
         # Get facet list
         lst_face = np.empty((0,),dtype='int')
         for face_name in face_list:
             id_face = self.surface_list['ids'][self.surface_list['names'].index(face_name)]
+            print('  + \'{0:s}\' face'.format(face_name))
             lst_face_part = np.where((face_id==id_face))[0]
             lst_face = np.concatenate((lst_face,lst_face_part))
 
         surf_nfaces=lst_face.size            
         
+        
         vert_per_face = self.face_conn['vert_per_face']
         face_vertex_list = self.face_conn['face_vertex_list']
         
-        # subgrp = grp.create_group(surface_name)
-        # subgrp.create_dataset('lst_faces', data=lst_face, dtype='i8')
-        
-        if self.verbose:
-            print('Triangulation of {0:s}'.format(surface_name,surf_nfaces))
 
         if surf_nfaces>0:
 
@@ -424,15 +421,11 @@ class PFConvertion:
             results['loc_tri'] = tri_connectivity
             results['loc_qua'] = quad_connectivity
             results['loc_nodes'] = glo_lst_node.size
-
             
             if self.mesh is None:
                 self.mesh = dict()
             self.mesh[surface_name] = results
-            
-            
-            
-    
+                        
     def save_parameters(self,casename,dirout):
         """Function to export convertion parameters in a separated hdf5 file.
 
