@@ -276,16 +276,17 @@ class PFConvertion:
     def triangulate_surface(self,surface_name,face_list,min_threshold=1.0e-15):
         """Function to generate mesh of the given surface.
         Any element with more than 4 nodes are triangulated
+        Results are stored in the class
 
         Parameters
         ----------
-        face_name : type
-            Description of parameter `face_name`.
-
-        Returns
-        -------
-        type
-            Description of returned object.
+        surface_name : string
+            name of the surface assembly
+        face_list : list of strings
+            list of the surface names to be gather in the assembly
+            the surface names must exists in the snc file to be converted
+        min_threshold : float
+            Threshold for triangulation. Elements below this thimit will be droped
 
         """
         
@@ -428,19 +429,27 @@ class PFConvertion:
             if self.mesh is None:
                 self.mesh = dict()
             self.mesh[surface_name] = results
+            
+            
+            
     
-    def save_parameters(self,outFile):
+    def save_parameters(self,casename,dirout):
         """Function to export convertion parameters in a separated hdf5 file.
 
         Parameters
         ----------
-        outFile : string
-            File name (and path) of the output file
+        casename : string
+            Label of the configuration
+        dirout : string
+            Directory for file export
 
         """
         import h5py
-
-        print("Creating a new convertion parameter file:\n  {0:s}".format(outFile))
+        import os.path
+        
+        
+        outFile = os.path.join(dirout,'param_pf_{0:s}.hdf5'.format(casename))
+        print("Creating a new convertion parameter file:\n  ->  {0:s}".format(outFile))
         
         if self.params is not None:
           param_list = self.params.keys()
@@ -480,9 +489,23 @@ class PFConvertion:
             
         fparams.close()
         
-    def save_vtk(self,casename):
+    def save_vtk(self,casename,dirout):
+        """Function to export surface mesh for paraview
+
+        Parameters
+        ----------
+        casename : string
+            Label of the configuration
+        dirout : string
+            Directory for file export
+
+        """
         from module_vtk_utils import faces_to_vtkPolyData,save_MBPolyData
+        import os.path
         
+        outFile = os.path.join(dirout,'surface_mesh_{0:s}.vtm'.format(casename))
+        print("Exporting in VTK format:\n  ->  {0:s}".format(outFile))
+
         list_polyData_Blocks = dict()
         for surface_name in self.mesh.keys():
             res = self.mesh[surface_name]
@@ -492,4 +515,4 @@ class PFConvertion:
         
             list_polyData_Blocks[surface_name] = faces_to_vtkPolyData(loc_nodes,tri,qua)
         
-        save_MBPolyData(list_polyData_Blocks,'surface_mesh_{0:s}.vtm'.format(casename))
+        save_MBPolyData(list_polyData_Blocks,outFile)
