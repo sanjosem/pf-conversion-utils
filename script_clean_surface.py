@@ -44,9 +44,9 @@ if 'casename' not in uinfo.keys():
     uinfo['casename'] = uinfo['snc_filename'].replace('.snc','')
 
 if 'verbose' in uinfo.keys():
-    sncConv = module_conv_utils.PFConvertion(sncfile,uinfo['verbose'])
+    sncConv = module_conv_utils.PFConversion(sncfile,uinfo['verbose'])
 else:
-    sncConv = module_conv_utils.PFConvertion(sncfile)
+    sncConv = module_conv_utils.PFConversion(sncfile)
     
 sncConv.read_conversion_parameters()
 
