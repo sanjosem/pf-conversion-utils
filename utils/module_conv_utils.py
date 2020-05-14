@@ -160,6 +160,12 @@ class PFConversion:
         for iv,var in enumerate(var_list):
             if var in ['x_velocity','y_velocity','z_velocity','static_pressure','density']:
                 self.vars[var] = iv
+                if var == 'static_pressure':
+                    self.vars['density'] = -1
+                if var == 'density':
+                    self.vars['static_pressure'] = -1
+            else:
+                print('Conversion for variable {0:s} is not yet implemented'.format(var))
             
         f.close()
 
