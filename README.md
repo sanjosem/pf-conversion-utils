@@ -1,2 +1,2 @@
-# pf-convertion-utils
+# pf-conversion-utils
 Python toolbox to read and export PF simulation files
