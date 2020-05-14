@@ -1,4 +1,4 @@
-import module_conv_utils
+from module_conv_utils import PFConversion
 
 class sncConversion(PFConversion):
     def __init__(self,pfFile,verbose=True):
