@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# from importlib import reload  # If on Python 3
+from importlib import reload  # If on Python 3
 
 import yaml
 import numpy as np
@@ -7,8 +7,8 @@ import sys
 import os.path
 from os import makedirs
 
-import module_conv_utils
-# reload(module_conv_utils)
+import pftools.snc_conv as pfsnct
+reload(pfsnct)
 
 if len(sys.argv)>1:
     input_file = sys.argv[1]
@@ -44,9 +44,9 @@ if 'casename' not in uinfo.keys():
     uinfo['casename'] = uinfo['snc_filename'].replace('.snc','')
 
 if 'verbose' in uinfo.keys():
-    sncConv = module_conv_utils.PFConversion(sncfile,uinfo['verbose'])
+    sncConv = pfsnct.sncConversion(sncfile,uinfo['verbose'])
 else:
-    sncConv = module_conv_utils.PFConversion(sncfile)
+    sncConv = pfsnct.sncConversion(sncfile)
     
 sncConv.read_conversion_parameters()
 

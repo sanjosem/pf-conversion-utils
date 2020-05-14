@@ -1,4 +1,4 @@
-from module_conv_utils import PFConversion
+from pftools.module_conv_utils import PFConversion
 
 class sncConversion(PFConversion):
     def __init__(self,pfFile,verbose=True):
@@ -328,10 +328,10 @@ class sncConversion(PFConversion):
 
         if self.mesh is not None:
             for surface_name in self.mesh.keys():
-            res = self.mesh[surface_name]
-            subgrp = gcon.create_group('surface_name')
-            subgrp.create_dataset('lst_faces', data=res['glo_faces']) #, dtype='i8')
-            subgrp.create_dataset('glo_node_list', data=res['glo_nodes'])
+                res = self.mesh[surface_name]
+                subgrp = gcon.create_group('surface_name')
+                subgrp.create_dataset('lst_faces', data=res['glo_faces']) #, dtype='i8')
+                subgrp.create_dataset('glo_node_list', data=res['glo_nodes'])
             
         fparams.close()
 
@@ -347,7 +347,7 @@ class sncConversion(PFConversion):
             Directory for file export
 
         """
-        from module_vtk_utils import faces_to_vtkPolyData,save_MBPolyData
+        from pftools.module_vtk_utils import faces_to_vtkPolyData,save_MBPolyData
         import os.path
 
         outFile = os.path.join(dirout,'surface_mesh_{0:s}.vtm'.format(casename))
