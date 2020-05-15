@@ -2,7 +2,7 @@ from pftools.module_conv_utils import PFConversion
 
 class sncConversion(PFConversion):
     def __init__(self,pfFile,verbose=True):
-        super().__init__(pfFile,verbose=True)
+        super().__init__(pfFile,verbose)
         
         self.surface_list = None
         self.node_coords = None

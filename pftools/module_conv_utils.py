@@ -33,6 +33,10 @@ class PFConversion:
         ext = pfFile.split('.')[-1]
         if ext == 'snc':
             self.format = 'surface'
+        elif ext == 'psnc':
+            self.format = 'surface-probe'
+        elif ext == 'pfnc':
+            self.format = 'volume-probe'
         else:
             raise NotImplementedError('Only snc file are supported')
         
@@ -144,15 +148,20 @@ class PFConversion:
         """Extract the available variable names
 
         """
-        if self.verbose:
-            print("Variable names")
-            
+        
+        
+        from scipy.io import netcdf
+        from numpy import where
+        
         f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
-            
+        
+        if self.verbose:
+            print("Extracting Variable names")
+                        
         x = f.variables['variable_short_names'][()]
         var_list = x.tostring().decode('utf-8').split('\x00')[:f.dimensions['n_variables']]
         if self.verbose:
-            print("Found variables:",var_list)
+            print("  -> Found variables:",var_list)
             
         self.vars = dict()
 
@@ -165,7 +174,7 @@ class PFConversion:
                 if var == 'density':
                     self.vars['static_pressure'] = -1
             else:
-                print('Conversion for variable {0:s} is not yet implemented'.format(var))
+                print('  ! Conversion for variable {0:s} is not yet implemented'.format(var))
             
         f.close()
 
