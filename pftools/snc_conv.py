@@ -1,15 +1,42 @@
 from pftools.module_conv_utils import PFConversion
 
 class sncConversion(PFConversion):
+    """Class for surface mesh conversion
+    inherits from PFConversion
+
+    Parameters
+    ----------
+    pfFile : string
+        powerFLOW surface file
+    verbose : bool
+        Activate or desactivate informative prints (default: True)
+
+    Methods:
+    ----------
+    read_surface_names()
+        Read surfaces contained in file
+    read_coordinates()
+        Read and store node coordinates
+    read_connectivity()
+        Read, prepare and store connectivity
+    triangulate_surface()
+        Triangulate surface elements that are neither triangles or quads
+    save_vtk()
+        Save mesh and data to VTK multiblock format
+
+    """
     def __init__(self,pfFile,verbose=True):
         super().__init__(pfFile,verbose)
-        
+        self.format = 'surface'
         self.surface_list = None
         self.node_coords = None
         self.face_conn = None
         self.mesh = None
+        
+        if self.verbose:
+            print('PF file format is: {0:s}'.format(self.format))
 
-    def read_face_names(self):
+    def read_surface_names(self):
         """Function to read the surface patchs (called faces) contained in the powerflow file
 
         Returns

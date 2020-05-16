@@ -3,8 +3,6 @@
 Author: Marlene Sanjose
 '''
     
-
-
 class PFConversion:
     """Initiate the convertion class associated to a given PowerFLOW file.
 
@@ -17,35 +15,31 @@ class PFConversion:
             
     Methods:
     ----------
-    read_surface_names()
-        Read surfaces contains in file
     read_conversion_parameters()
-        Read and compute convertion parameters
+        Read and compute conversion parameters
+    read_rotation_information()
+        Read rotating domain parameters (if existing)
     save_parameters(outFile)
-        Save convertion parameters
+        Save conversion parameters
+    define_measurement_variables()
+        Read available variables
     """
     def __init__(self,pfFile,verbose=True):
 
         from os.path import exists as fexists
         if not fexists(pfFile):
             raise RuntimeError('File {0:s} could not be found'.format(pfFile))
-            
-        ext = pfFile.split('.')[-1]
-        if ext == 'snc':
-            self.format = 'surface'
-        elif ext == 'psnc':
-            self.format = 'surface-probe'
-        elif ext == 'pfnc':
-            self.format = 'volume-probe'
-        else:
-            raise NotImplementedError('Only snc file are supported')
-        
-            
+
         self.pfFile = pfFile
+        self.format = None
         self.params = None
         self.rotation = False
         self.vars = None
+        self.time = None
         self.verbose = verbose
+        
+        if self.verbose:
+            print('PFConversion class instance created for file:\n  {0:s}'.format(pfFile))
         
 
     def read_conversion_parameters(self):
@@ -145,7 +139,7 @@ class PFConversion:
         
             
     def define_measurement_variables(self):
-        """Extract the available variable names
+        """Extract the available variable names and store in vars dictionary
 
         """
         
@@ -177,17 +171,64 @@ class PFConversion:
                 print('  ! Conversion for variable {0:s} is not yet implemented'.format(var))
             
         f.close()
-
-            
-    def extract_measurements(self,frame):
-        """Convert measurement variables
-
-        Parameters
-        ----------
-        frame : int
-            frame number to be extracted
+        
+    def extract_time_info(self):
+        """Extract the time information and store in class
 
         """
+        
+        from scipy.io import netcdf
+        from numpy import diff
+
+        if self.params is None:
+            self.read_conversion_parameters()
+
+        f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
+        
+        if self.verbose:
+            print("Extracting Time information")
+            
+        self.time = dict()
+        
+        nsets = f.variables['start_time'].shape[0]
+        self.time['nsets'] = nsets
+        
+        if self.verbose:
+            print('  -> Number of time frames: {0:d}'.format(self.time['nsets']))
+            
+        st = f.variables['start_time'][()]
+        et = f.variables['end_time'][()]
+        self.time['time_center'] = 0.5*(st+et)*self.params['dt']
+        
+        if self.verbose:
+            print('  -> First frame ({0:d}): {1:g} s'.format(0,self.time['time_center'][0]))
+            if self.time['nsets']>1:
+                print('  -> Last frame ({0:d}): {1:g} s'.format(self.time['nsets'],self.time['time_center'][-1]))
+                
+        avg_period = et - st
+        sampling_period = diff(self.time['time_center'])
+        
+        if not avg_period.min() == avg_period.max():
+            print('  ! Averaging period is not constant')
+            print('  ! Min/max sampling [timestep]: {0:.0f} {1:.0f}'.format(avg_period.min(),
+                                avg_period.max()))
+        else:
+            self.time['Tavg'] = avg_period.mean()*self.params['dt']
+            if self.verbose:
+                print('  -> Time averaging: {0:.6e} s'.format(self.time['Tavg']))
+
+        if not (sampling_period.min()-sampling_period.max())<self.params['dt']:
+            print('  ! Sampling period is not constant')
+            print('  ! Min/max sampling [sec]: {0:.6e} {1:.6e}'.format(sampling_period.min(),
+                    sampling_period.max()))
+        else:
+            self.time['Tsampling'] = sampling_period.mean()
+            self.time['fs'] = 1.0/self.time['Tsampling']
+            if self.verbose:
+                print('  -> Time sampling: {0:.6e} s'.format(self.time['Tsampling']))
+                print('  -> Frequency sampling: {0:,.0f} Hz'.format(self.time['fs']))
+
+        f.close()
         
     def save_parameters(self,casename,dirout):
         """Function to export convertion parameters in a separated hdf5 file.

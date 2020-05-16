@@ -1,0 +1,13 @@
+# Input data
+directory: /home/marlene/WK/Suivi_Stahl/data
+# filetype is either pfnc or psnc
+file_type: pfnc
+# this is the common name to find all probe files to be processed
+probe_name: Mirror
+
+# Output data
+output_directory: /home/marlene/WK/Suivi_Stahl/converted
+delimiter: ','
+
+# Verbosity
+verbose: False
