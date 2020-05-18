@@ -13,15 +13,15 @@ class sncConversion(PFConversion):
 
     Methods:
     ----------
-    read_surface_names()
+    read_surface_names
         Read surfaces contained in file
-    read_coordinates()
+    read_coordinates
         Read and store node coordinates
-    read_connectivity()
+    read_connectivity
         Read, prepare and store connectivity
-    triangulate_surface()
+    triangulate_surface
         Triangulate surface elements that are neither triangles or quads
-    save_vtk()
+    save_vtk
         Save mesh and data to VTK multiblock format
 
     """
@@ -32,12 +32,13 @@ class sncConversion(PFConversion):
         self.node_coords = None
         self.face_conn = None
         self.mesh = None
+        self.data = None
         
         if self.verbose:
             print('PF file format is: {0:s}'.format(self.format))
 
     def read_surface_names(self):
-        """Function to read the surface patchs (called faces) contained in the powerflow file
+        """Method to read the surface patchs (called faces) contained in the powerflow file
 
         Returns
         -------
@@ -75,7 +76,7 @@ class sncConversion(PFConversion):
         self.surface_list['face_counts'] = face_counts
 
     def read_coordinates(self,store=True):
-        """Function to read and scale node coordinates. The array is stored in the class
+        """Method to read and scale node coordinates. The array is stored in the class
 
         Parameters
         ----------
@@ -111,7 +112,7 @@ class sncConversion(PFConversion):
         self.node_coords = coords.astype('float')
 
     def read_connectivity(self):
-        """Function to read and prepare connectivity.
+        """Method to read and prepare connectivity.
         Arrays are stored in the class
 
         """
@@ -136,6 +137,8 @@ class sncConversion(PFConversion):
         vert_per_face[-1] = self.params['nvertices'] - first_vertex[-1]
         max_vertex_per_face = vert_per_face.max()
         min_vertex_per_face = vert_per_face.min()
+        self.params['min_vertex_per_face'] = min_vertex_per_face
+        self.params['max_vertex_per_face'] = min_vertex_per_face
 
         if self.verbose:
             print('Reading connectivity')
@@ -151,23 +154,24 @@ class sncConversion(PFConversion):
         self.face_conn['vert_per_face'] = vert_per_face
         self.face_conn['face_vertex_list'] = face_vertex_list
         
-        face_weight = self.params['coeff_dx']**2 / vert_per_face.astype('float')
+        surfel_area = f.variables['surfel_area'][()] * self.params['coeff_dx']**2
+        face_weight = surfel_area / vert_per_face.astype('float')
 
         node_weight = np.zeros((self.params['nnodes'],))
-        for nvert in range(min_vertex_per_face,max_vertex_per_face):
+        for nvert in range(min_vertex_per_face,max_vertex_per_face+1):
             lst_face = np.where(vert_per_face == nvert)[0]
             for iv in range(nvert):
                 node_weight[face_vertex_list[lst_face,iv]] += face_weight[lst_face]
                 
         self.face_conn['face_weight'] = face_weight
         self.face_conn['node_weight'] = node_weight
-        self.face_conn['face_area'] = f.variables['surfel_area'][()] * self.params['coeff_dx']**2
+        self.face_conn['face_area'] = surfel_area
         self.face_conn['face_norm'] = f.variables['surfel_normal'][()].astype('float')
         
         f.close()
         
     def triangulate_surface(self,surface_name,face_list,min_threshold=1.0e-15):
-        """Function to generate mesh of the given surface.
+        """Method to generate mesh of the given surface.
         Any element with more than 4 nodes are triangulated
         Results are stored in the class
 
@@ -319,9 +323,107 @@ class sncConversion(PFConversion):
             if self.mesh is None:
                 self.mesh = dict()
             self.mesh[surface_name] = results
+            
+    def read_frame_data(self,surface_name,frame):
+        
+        from scipy.io import netcdf
+        import numpy as np
+        import pandas as pd
+        
+        if self.vars is None:
+            self.define_measurement_variables()
+            
+        if self.face_conn is None:
+            self.read_connectivity()
+        
+        if self.mesh is None:
+            raise RuntimeError('Mesh must be generated first using method triangulate_surface')
+            
+        if not surface_name in self.mesh.keys():
+            raise RuntimeError('Mesh must be generated first using method triangulate_surface for {0:s}'.format(surface_name))
+            
+        # before py2f wrapper
+        if not type(frame) == int:
+            raise RuntimeError('frame input must be an integer')
+        
+        print('Converting data of \'{0:s}\' surface'.format(surface_name))
+        
+        slicing_instant = slice(frame,frame+1)
+        
+        nvars = len(self.vars.keys())
+        
+        lst_face = self.mesh[surface_name]['glo_faces']
+        vert_per_face = self.face_conn['vert_per_face'][lst_face]
+        
+        # Get data (selected faces, selected variables)
+        f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
+        tmp = f.variables['measurements'][slicing_instant,:,lst_face]
+        f.close()
+
+        # Conversion in SI
+        data_cell = np.zeros((tmp.shape[0],nvars,tmp.shape[-1]))
+        for ivar,var in enumerate(self.vars.keys()):
+            idx = self.vars[var]
+            
+            if var == 'static_pressure':
+                if idx>=0 :
+                    data_cell[:,ivar,:] = ( ( tmp[:,idx,:] + self.params['offset_pressure'] ) 
+                                          * self.params['coeff_press'] )
+                else:
+                    idx = self.vars['density']
+                    data_cell[:,ivar,:] = ( tmp[:,idx,:] * self.params['weight_rho_to_pressure']
+                                     + self.params['offset_pressure'] ) * self.params['coeff_press']
+                                
+            if var == 'density':
+                if idx>=0:
+                    data_cell[:,ivar,:] = tmp[:,idx,:] * self.params['coeff_density'] 
+                else:
+                    idx = self.vars['static_pressure']
+                    data_cell[:,ivar,:]  =  ( tmp[:,idx,:] * self.params['weight_pressure_to_rho']
+                                       * self.params['coeff_density'] )
+            if var in ['x_velocity','y_velocity','z_velocity']:
+                data_cell[:,ivar,:] =  tmp[:,idx,:] * self.params['coeff_vel'] 
+                
+        if self.verbose:
+            stats = pd.DataFrame(data=data_cell.mean(axis=-1),columns=self.vars.keys())
+            print('  -> Stats (cell)')
+            print(stats)
+
+        ninst,nvars,ncells = data_cell.shape
+        nnodes = self.params['nnodes']
+        
+        # Scatter / Gather operation
+        data_node = np.zeros((ninst,nvars,nnodes))
+        surface_node = np.zeros((nnodes,))
+        
+        for nf,iface in enumerate(lst_face):
+            nvert = self.face_conn['vert_per_face'][iface]
+            face_weight = self.face_conn['face_weight'][iface]
+            glo_nodes = self.face_conn['face_vertex_list'][iface,:nvert]
+            data_node[:,:,glo_nodes] += data_cell[:,:,nf][:,:,np.newaxis]*face_weight
+            surface_node[glo_nodes] += face_weight
+
+        # To avoid divide by 0 error
+        eps = self.face_conn['face_area'].min()/100.
+        surface_node[surface_node<eps] = eps
+        # Scale
+        data_node = data_node/surface_node[np.newaxis,np.newaxis,:]
+        
+        # Storage
+        if self.data is None:
+            self.data = dict()
+            
+        lst_node = self.mesh[surface_name]['glo_nodes']
+        self.data[surface_name] = data_node[:,:,lst_node]
+
+        if self.verbose:
+            stats = pd.DataFrame(data=self.data[surface_name].mean(axis=-1),columns=self.vars.keys())
+            print('  -> Stats (nodes)')
+            print(stats)
+        
 
     def save_parameters(self,casename,dirout):
-        """Function to export convertion parameters in a separated hdf5 file.
+        """Method to export convertion parameters in a separated hdf5 file.
 
         Parameters
         ----------
@@ -364,7 +466,7 @@ class sncConversion(PFConversion):
 
 
     def save_vtk(self,casename,dirout):
-        """Function to export surface mesh for paraview
+        """Method to export surface mesh for paraview
 
         Parameters
         ----------
@@ -374,7 +476,7 @@ class sncConversion(PFConversion):
             Directory for file export
 
         """
-        from pftools.module_vtk_utils import faces_to_vtkPolyData,save_MBPolyData
+        from pftools.module_vtk_utils import faces_to_vtkPolyData,save_MBPolyData,data_to_vtkPolyData
         import os.path
 
         outFile = os.path.join(dirout,'surface_mesh_{0:s}.vtm'.format(casename))
@@ -388,5 +490,9 @@ class sncConversion(PFConversion):
             qua = res['loc_qua']
 
             list_polyData_Blocks[surface_name] = faces_to_vtkPolyData(loc_nodes,tri,qua)
+            
+            if surface_name in self.data.keys():
+                list_polyData_Blocks[surface_name] = data_to_vtkPolyData(
+                    list_polyData_Blocks[surface_name],self.data[surface_name][0,:,:],self.vars.keys())
 
         save_MBPolyData(list_polyData_Blocks,outFile)

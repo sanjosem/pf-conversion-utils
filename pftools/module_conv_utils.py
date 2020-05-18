@@ -15,14 +15,16 @@ class PFConversion:
             
     Methods:
     ----------
-    read_conversion_parameters()
+    read_conversion_parameters
         Read and compute conversion parameters
-    read_rotation_information()
+    read_rotation_information
         Read rotating domain parameters (if existing)
-    save_parameters(outFile)
-        Save conversion parameters
-    define_measurement_variables()
+    define_measurement_variables
         Read available variables
+    extract_time_info
+        Read time information such as sampling and averaging time
+    save_parameters
+        Save conversion parameters
     """
     def __init__(self,pfFile,verbose=True):
 
@@ -92,7 +94,7 @@ class PFConversion:
         """
         
         from scipy.io import netcdf
-        from numpy import where
+        from numpy import where,pi
         
         f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
             
@@ -108,7 +110,7 @@ class PFConversion:
             tmp = f.variables['lrf_constant_angular_vel_mag'][0]
             self.params['omega'] = tmp / self.params['coeff_dt']
             
-            n_rot0 = f.variables['lrf_initial_n_revolutions'][0] * np.pi * 2.0
+            n_rot0 = f.variables['lrf_initial_n_revolutions'][0] * pi * 2.0
             alpha0 = f.variables['lrf_initial_angular_rotation'][0] + n_rot0
 
             rotation_axis_origin = f.variables['lrf_axis_origin'][0,:]  # axe de rotation
@@ -173,7 +175,7 @@ class PFConversion:
         f.close()
         
     def extract_time_info(self):
-        """Extract the time information and store in class
+        """Extract the time information and store the parameters in the time dictionnary in the class instance. 
 
         """
         
@@ -223,10 +225,10 @@ class PFConversion:
                     sampling_period.max()))
         else:
             self.time['Tsampling'] = sampling_period.mean()
-            self.time['fs'] = 1.0/self.time['Tsampling']
+            self.time['Fsampling'] = 1.0/self.time['Tsampling']
             if self.verbose:
                 print('  -> Time sampling: {0:.6e} s'.format(self.time['Tsampling']))
-                print('  -> Frequency sampling: {0:,.0f} Hz'.format(self.time['fs']))
+                print('  -> Frequency sampling: {0:,.0f} Hz'.format(self.time['Fsampling']))
 
         f.close()
         

@@ -50,7 +50,7 @@ else:
     
 sncConv.read_conversion_parameters()
 
-sncConv.read_face_names()
+sncConv.read_surface_names()
 list_av_face_names = sncConv.surface_list['names']
 
 if uinfo['face_names'] is not None:
@@ -72,5 +72,7 @@ else:
     for surface_name in uinfo['face_names'].keys():
         sncConv.triangulate_surface(surface_name,uinfo['face_names'][surface_name])
 
-sncConv.save_parameters(uinfo['casename'],uinfo['output_directory'])
+for surface_name in uinfo['face_names'].keys():
+    sncConv.read_frame_data(surface_name,0)
+
 sncConv.save_vtk(uinfo['casename'],uinfo['output_directory'])

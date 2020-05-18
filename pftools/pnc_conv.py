@@ -4,7 +4,6 @@ class pncConversion(PFConversion):
     """Class for probe data conversion
     inherits from PFConversion
 
-
     Parameters
     ----------
     pfFile : string 
@@ -41,7 +40,10 @@ class pncConversion(PFConversion):
         
         
     def compute_probe_weight(self):
-        """Collect volume/surface scaling and store it in the class
+        """Collect volume/surface scaling and store it in the class instance
+        The results is stored in the class instance 
+        and there is no input except from the class instance.
+
 
         """
         
@@ -76,6 +78,11 @@ class pncConversion(PFConversion):
                 print('  -> Radius: {0:e} m'.format(rad))
 
     def read_measurement(self):
+        """Function that read and convert data as probe data in SI units
+        The results is stored in the class instance 
+        and there is no input except from the class instance.
+
+        """
         
         from scipy.io import netcdf
         from pandas import DataFrame
@@ -121,7 +128,28 @@ class pncConversion(PFConversion):
         self.data = DataFrame(data=data)
         
     def export_temporal_data(self,casename,dirout,delimiter=' ',index=False,
-                             extension='txt'):
+                                 extension='txt'):
+        """Function to export probe temporal data to a text file. 
+        All quantities will be written in SI units
+
+        Parameters
+        ----------
+        casename : string
+            Name assiciated to the present probe conversion. 
+            The casename is used to build the output file name
+            temporal_<casename>.<extension>
+        dirout : string
+            Absolute path/relative path where the converted file will be written
+        delimiter : char
+            Field delimiter (default is space).
+            If comma ',' is specified the file extension will be 'csv'
+        index : bool
+            Append index of rows as the first column in the text file
+        extension : string
+            Extension of the text file (by default txt)
+
+
+        """
     
         import os.path
 

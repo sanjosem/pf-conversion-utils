@@ -26,6 +26,15 @@ def faces_to_vtkPolyData(coords,tri_elm,quad_elm):
     cells.SetCells(ncells,faceIds)
     
     mesh.SetPolys(cells)
+    
+    return mesh
+
+def data_to_vtkPolyData(mesh,data,vars):
+
+    for ivar,var in enumerate(vars):
+        parray = numpy_to_vtk(data[ivar,:])
+        parray.SetName(var)
+        mesh.GetPointData().AddArray(parray)
 
     return mesh
 
