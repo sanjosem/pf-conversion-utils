@@ -53,7 +53,7 @@ class pncConversion(PFConversion):
         if self.params is None:
             self.read_conversion_parameters()
 
-        f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
+        f = netcdf.Dataset(self.pfFile, 'r')
         
         if self.format == 'volume-probe':
             self.weight = f.variables['fluid_volumes'][()] * self.params['coeff_dx']**3
@@ -99,7 +99,7 @@ class pncConversion(PFConversion):
         data = dict()
         data['time'] = self.time['time_center']
         
-        f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
+        f = netcdf.Dataset(self.pfFile, 'r')
         meas = f.variables['measurements'][()] * self.weight
         mean_meas = meas.sum(axis=-1) * self.iscale
         f.close()

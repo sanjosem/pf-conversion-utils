@@ -52,7 +52,7 @@ class fncConversion(PFConversion):
         self.domain = dict()
         if self.rotation:
         
-            f = netcdf.netcdf_file(self.pfFile,'r',mmap=False)
+            f = netcdf.Dataset(self.pfFile,'r',mmap=False)
             
             ref_frame_indices = f.variables['ref_frame_indices'] # -1 stationnary 0 LRF
             
@@ -79,7 +79,7 @@ class fncConversion(PFConversion):
         if self.domain is None:
             self.read_domains()
 
-        f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
+        f = netcdf.Dataset(self.pfFile, 'r')
 
         element_coords = f.variables['coords'][()].astype('float')
         voxel_scales = f.variables['voxel_scales'][()]
@@ -186,7 +186,7 @@ class fncConversion(PFConversion):
         
         nvars = len(self.vars.keys())
         
-        f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
+        f = netcdf.Dataset(self.pfFile, 'r')
 
         for dom in self.domain.keys():
             
@@ -265,7 +265,7 @@ class fncConversion(PFConversion):
         
         
         f.close()
-
+        
 
     def save_parameters(self,casename,dirout):
         """Method to export convertion parameters in a separated hdf5 file.

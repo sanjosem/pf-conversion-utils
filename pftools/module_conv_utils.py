@@ -49,9 +49,9 @@ class PFConversion:
 
         """
         
-        from scipy.io import netcdf
+        import netCDF4 as netcdf
         
-        f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
+        f = netcdf.Dataset(self.pfFile, 'r')
         
         lx_offsets = f.variables['lx_offsets'][()]
         lx_scales = f.variables['lx_scales'][()]
@@ -93,10 +93,10 @@ class PFConversion:
 
         """
         
-        from scipy.io import netcdf
+        import netCDF4 as netcdf
         from numpy import where,pi
         
-        f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
+        f = netcdf.Dataset(self.pfFile, 'r')
             
         if 'ref_frame_indices' in f.variables.keys():
             nlrfs = f.dimensions['nlrfs']
@@ -146,10 +146,10 @@ class PFConversion:
         """
         
         
-        from scipy.io import netcdf
+        import netCDF4 as netcdf
         from numpy import where
         
-        f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
+        f = netcdf.Dataset(self.pfFile, 'r')
         
         if self.verbose:
             print("Extracting Variable names")
@@ -179,13 +179,13 @@ class PFConversion:
 
         """
         
-        from scipy.io import netcdf
+        import netCDF4 as netcdf
         from numpy import diff
 
         if self.params is None:
             self.read_conversion_parameters()
 
-        f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
+        f = netcdf.Dataset(self.pfFile, 'r')
         
         if self.verbose:
             print("Extracting Time information")

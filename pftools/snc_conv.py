@@ -51,7 +51,7 @@ class sncConversion(PFConversion):
         from scipy.io import netcdf
         from numpy import unique
         
-        f = netcdf.netcdf_file(self.pfFile,'r',mmap=False)
+        f = netcdf.Dataset(self.pfFile,'r',mmap=False)
         
         x = f.variables['face_names'][()]
         nb_fnames = f.dimensions['nfaces']
@@ -87,7 +87,7 @@ class sncConversion(PFConversion):
         
         from scipy.io import netcdf
 
-        f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
+        f = netcdf.Dataset(self.pfFile, 'r')
 
         coords=f.variables['vertex_coords'][()]
         
@@ -125,7 +125,7 @@ class sncConversion(PFConversion):
         
         self.face_conn = dict()
 
-        f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
+        f = netcdf.Dataset(self.pfFile, 'r')
         
         first_vertex = f.variables['first_vertex_refs'][()]
         vertex_list = f.variables['vertex_refs']
@@ -202,7 +202,7 @@ class sncConversion(PFConversion):
         if self.face_conn is None:
             self.read_connectivity()
         
-        f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
+        f = netcdf.Dataset(self.pfFile, 'r')
         face_id=f.variables['face'][()]
         f.close()
         
@@ -356,7 +356,7 @@ class sncConversion(PFConversion):
         vert_per_face = self.face_conn['vert_per_face'][lst_face]
         
         # Get data (selected faces, selected variables)
-        f = netcdf.netcdf_file(self.pfFile, 'r', mmap=False)
+        f = netcdf.Dataset(self.pfFile, 'r')
         tmp = f.variables['measurements'][slicing_instant,:,lst_face]
         f.close()
 
