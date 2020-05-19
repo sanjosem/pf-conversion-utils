@@ -22,7 +22,7 @@ class sncConversion(PFConversion):
     triangulate_surface
         Triangulate surface elements that are neither triangles or quads
     save_vtk
-        Save mesh and data to VTK multiblock format
+        Create multiblock VTK format (PolyData)
 
     """
     def __init__(self,pfFile,verbose=True):
@@ -476,7 +476,7 @@ class sncConversion(PFConversion):
             Directory for file export
 
         """
-        from pftools.module_vtk_utils import faces_to_vtkPolyData,save_MBPolyData,data_to_vtkPolyData
+        from pftools.module_vtk_utils import faces_to_vtkPolyData,save_MultiBlock,data_to_vtkBlock
         import os.path
 
         outFile = os.path.join(dirout,'surface_mesh_{0:s}.vtm'.format(casename))
@@ -492,7 +492,7 @@ class sncConversion(PFConversion):
             list_polyData_Blocks[surface_name] = faces_to_vtkPolyData(loc_nodes,tri,qua)
             
             if surface_name in self.data.keys():
-                list_polyData_Blocks[surface_name] = data_to_vtkPolyData(
+                list_polyData_Blocks[surface_name] = data_to_vtkBlock(
                     list_polyData_Blocks[surface_name],self.data[surface_name][0,:,:],self.vars.keys())
 
-        save_MBPolyData(list_polyData_Blocks,outFile)
+        save_MultiBlock(list_polyData_Blocks,outFile)

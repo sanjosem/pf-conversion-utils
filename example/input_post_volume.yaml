@@ -1,0 +1,16 @@
+# Input data (Required)
+directory: /home/marlene/WK/Suivi_Stahl/data
+
+# this is the name of the surface file to convert (Required)
+fnc_filename: meas_plane_airfoil_final_frame100.fnc
+
+# Verbosity (information will be displayed during the convertion)
+verbose: True
+casename: plane_airfoil
+
+# Output data
+output_directory: /home/marlene/WK/Suivi_Stahl/converted/airfoil
+
+# Instant
+frame:
+  - 0

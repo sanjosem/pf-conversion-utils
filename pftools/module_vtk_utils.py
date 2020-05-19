@@ -28,8 +28,41 @@ def faces_to_vtkPolyData(coords,tri_elm,quad_elm):
     mesh.SetPolys(cells)
     
     return mesh
+    
 
-def data_to_vtkPolyData(mesh,data,vars):
+def cells_to_vtkUnstruct(coords,cell_elm):
+    import numpy as np
+
+    # import vtk
+    # from vtk.util.numpy_support import numpy_to_vtk, numpy_to_vtkIdTypeArray
+    # coords = fncConv.node_coords['stator']
+    # cell_elm = fncConv.cell_conn['stator']
+
+    mesh = vtk.vtkUnstructuredGrid()
+
+    points = vtk.vtkPoints()
+    points.SetData(numpy_to_vtk(coords.astype(np.float64), deep=1))
+
+    mesh.SetPoints(points)
+
+    cells = vtk.vtkCellArray()
+    
+    ncells = cell_elm.shape[0]
+
+    hexs =  np.c_[np.tile(8, ncells),cell_elm].flatten().astype(np.int64)
+    
+    cell_type = vtk.vtkHexahedron().GetCellType()
+    cell_types = np.tile(cell_type, (ncells, 1))
+
+    cellIds = numpy_to_vtkIdTypeArray(hexs, deep=1)
+
+    cells.SetCells(ncells,cellIds)
+    
+    mesh.SetCells(cell_type,cells)
+    
+    return mesh    
+
+def data_to_vtkBlock(mesh,data,vars):
 
     for ivar,var in enumerate(vars):
         parray = numpy_to_vtk(data[ivar,:])
@@ -56,7 +89,7 @@ def save_polydata(polydata, file_name, binary=True, color_array_name=None):
     print('Writing file {0:s}'.format(file_name))
     writer.Write()
 
-def save_MBPolyData(struct_PolyData, outFile):
+def save_MultiBlock(struct_PolyData, outFile):
     
     surface_names = struct_PolyData.keys()
     nb_blk = len(surface_names)
