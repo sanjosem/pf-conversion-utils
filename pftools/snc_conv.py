@@ -33,6 +33,7 @@ class sncConversion(PFConversion):
         self.face_conn = None
         self.mesh = None
         self.data = None
+        self.vtk_object = None
         
         if self.verbose:
             print('PF file format is: {0:s}'.format(self.format))
@@ -48,13 +49,13 @@ class sncConversion(PFConversion):
             List of the corresponding ids
 
         """
-        from scipy.io import netcdf
+        import netCDF4 as netcdf
         from numpy import unique
         
-        f = netcdf.Dataset(self.pfFile,'r',mmap=False)
+        f = netcdf.Dataset(self.pfFile,'r')
         
         x = f.variables['face_names'][()]
-        nb_fnames = f.dimensions['nfaces']
+        nb_fnames = f.dimensions['nfaces'].size
         face_names = x.tostring().decode('utf-8').split('\x00')[:nb_fnames]
         face_id=f.variables['face'][()]
         
@@ -85,7 +86,7 @@ class sncConversion(PFConversion):
 
         """
         
-        from scipy.io import netcdf
+        import netCDF4 as netcdf
 
         f = netcdf.Dataset(self.pfFile, 'r')
 
@@ -117,7 +118,7 @@ class sncConversion(PFConversion):
 
         """
         
-        from scipy.io import netcdf
+        import netCDF4 as netcdf
         import numpy as np
         
         if self.node_coords is None:
@@ -187,7 +188,7 @@ class sncConversion(PFConversion):
 
         """
         
-        from scipy.io import netcdf
+        import netCDF4 as netcdf
         import numpy as np
         from scipy.spatial.distance import pdist, squareform
         from copy import deepcopy
@@ -326,7 +327,7 @@ class sncConversion(PFConversion):
             
     def read_frame_data(self,surface_name,frame):
         
-        from scipy.io import netcdf
+        import netCDF4 as netcdf
         import numpy as np
         import pandas as pd
         
@@ -465,23 +466,13 @@ class sncConversion(PFConversion):
         fparams.close()
 
 
-    def save_vtk(self,casename,dirout):
-        """Method to export surface mesh for paraview
-
-        Parameters
-        ----------
-        casename : string
-            Label of the configuration
-        dirout : string
-            Directory for file export
+    def create_vtk(self):
+        """Method to create vtk object and store it in the class instance
 
         """
-        from pftools.module_vtk_utils import faces_to_vtkPolyData,save_MultiBlock,data_to_vtkBlock
+        from pftools.module_vtk_utils import faces_to_vtkPolyData,data_to_vtkBlock
         import os.path
-
-        outFile = os.path.join(dirout,'surface_mesh_{0:s}.vtm'.format(casename))
-        print("Exporting in VTK format:\n  ->  {0:s}".format(outFile))
-
+        
         list_polyData_Blocks = dict()
         for surface_name in self.mesh.keys():
             res = self.mesh[surface_name]
@@ -495,4 +486,26 @@ class sncConversion(PFConversion):
                 list_polyData_Blocks[surface_name] = data_to_vtkBlock(
                     list_polyData_Blocks[surface_name],self.data[surface_name][0,:,:],self.vars.keys())
 
-        save_MultiBlock(list_polyData_Blocks,outFile)
+        self.vtk_object = list_polyData_Blocks
+        
+    def save_vtk(self,casename,dirout):
+        """Method to export surface mesh for paraview
+
+        Parameters
+        ----------
+        casename : string
+            Label of the configuration
+        dirout : string
+            Directory for file export
+
+        """
+        from pftools.module_vtk_utils import save_MultiBlock
+        import os.path
+        
+        if self.vtk_object is None:
+            self.create_vtk()
+
+        outFile = os.path.join(dirout,'surface_mesh_{0:s}.vtm'.format(casename))
+        print("Exporting in VTK format:\n  ->  {0:s}".format(outFile))
+
+        save_MultiBlock(self.vtk_object,outFile)

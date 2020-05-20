@@ -47,7 +47,7 @@ class pncConversion(PFConversion):
 
         """
         
-        from scipy.io import netcdf
+        import netCDF4 as netcdf
         from numpy import pi
         
         if self.params is None:
@@ -84,7 +84,7 @@ class pncConversion(PFConversion):
 
         """
         
-        from scipy.io import netcdf
+        import netCDF4 as netcdf
         from pandas import DataFrame
                 
         if self.iscale is None:

@@ -10,14 +10,15 @@ casename: airfoil
 
 # these are the name of the patch you want to extract in the surface file
 face_names:
-    airfoil: 
+    airfoil_LE:
       - airfoil.DW01
-      - airfoil.DW02
       - airfoil.UP01
-      - airfoil.UP02
-      - airfoil.TE
-      - trip_wake_suction
+    airfoil: 
       - trip_wake_pressure
+      - airfoil.DW02
+      - airfoil.TE
+      - airfoil.UP02
+      - trip_wake_suction
     
 # Threshold to ignore surface element in triangulation
 surface_min: 5.0e-14

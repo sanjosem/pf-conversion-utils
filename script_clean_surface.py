@@ -59,7 +59,9 @@ if uinfo['face_names'] is not None:
             if not ptn in list_av_face_names:
                 print('Face {0:s} is not available in {1:s}'.format(ptn,uinfo['snc_filename']))
 else:
-    uinfo['face_names'] = list_av_face_names
+    uinfo['face_names'] = dict()
+    for name in list_av_face_names:
+        uinfo['face_names'][name] = [name,]
 
 sncConv.read_coordinates()
 sncConv.read_connectivity()

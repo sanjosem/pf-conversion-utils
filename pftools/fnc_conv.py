@@ -42,7 +42,7 @@ class fncConversion(PFConversion):
         """Method to read the domains contained in the powerflow file
 
         """
-        from scipy.io import netcdf
+        import netCDF4 as netcdf
         from numpy import unique
         
         if self.params is None:
@@ -52,7 +52,7 @@ class fncConversion(PFConversion):
         self.domain = dict()
         if self.rotation:
         
-            f = netcdf.Dataset(self.pfFile,'r',mmap=False)
+            f = netcdf.Dataset(self.pfFile,'r')
             
             ref_frame_indices = f.variables['ref_frame_indices'] # -1 stationnary 0 LRF
             
@@ -72,7 +72,7 @@ class fncConversion(PFConversion):
 
         """
         
-        from scipy.io import netcdf
+        import netCDF4 as netcdf
         import numpy as np 
         from copy import deepcopy
         
@@ -167,7 +167,7 @@ class fncConversion(PFConversion):
             
     def read_frame_data(self,frame):
         
-        from scipy.io import netcdf
+        import netCDF4 as netcdf
         import numpy as np
         import pandas as pd
         

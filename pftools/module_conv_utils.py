@@ -155,7 +155,8 @@ class PFConversion:
             print("Extracting Variable names")
                         
         x = f.variables['variable_short_names'][()]
-        var_list = x.tostring().decode('utf-8').split('\x00')[:f.dimensions['n_variables']]
+        nvars = f.dimensions['n_variables'].size
+        var_list = x.tostring().decode('utf-8').split('\x00')[:nvars]
         if self.verbose:
             print("  -> Found variables:",var_list)
             
@@ -192,7 +193,7 @@ class PFConversion:
             
         self.time = dict()
         
-        nsets = f.variables['start_time'].shape[0]
+        nsets = f.dimensions['nsets'].size
         self.time['nsets'] = nsets
         
         if self.verbose:
@@ -208,7 +209,6 @@ class PFConversion:
                 print('  -> Last frame ({0:d}): {1:g} s'.format(self.time['nsets'],self.time['time_center'][-1]))
                 
         avg_period = et - st
-        sampling_period = diff(self.time['time_center'])
         
         if not avg_period.min() == avg_period.max():
             print('  ! Averaging period is not constant')
@@ -219,16 +219,19 @@ class PFConversion:
             if self.verbose:
                 print('  -> Time averaging: {0:.6e} s'.format(self.time['Tavg']))
 
-        if not (sampling_period.min()-sampling_period.max())<self.params['dt']:
-            print('  ! Sampling period is not constant')
-            print('  ! Min/max sampling [sec]: {0:.6e} {1:.6e}'.format(sampling_period.min(),
-                    sampling_period.max()))
-        else:
-            self.time['Tsampling'] = sampling_period.mean()
-            self.time['Fsampling'] = 1.0/self.time['Tsampling']
-            if self.verbose:
-                print('  -> Time sampling: {0:.6e} s'.format(self.time['Tsampling']))
-                print('  -> Frequency sampling: {0:,.0f} Hz'.format(self.time['Fsampling']))
+        if nsets>1:
+            sampling_period = diff(self.time['time_center'])
+
+            if not (sampling_period.min()-sampling_period.max())<self.params['dt']:
+                print('  ! Sampling period is not constant')
+                print('  ! Min/max sampling [sec]: {0:.6e} {1:.6e}'.format(sampling_period.min(),
+                        sampling_period.max()))
+            else:
+                self.time['Tsampling'] = sampling_period.mean()
+                self.time['Fsampling'] = 1.0/self.time['Tsampling']
+                if self.verbose:
+                    print('  -> Time sampling: {0:.6e} s'.format(self.time['Tsampling']))
+                    print('  -> Frequency sampling: {0:,.0f} Hz'.format(self.time['Fsampling']))
 
         f.close()
         
