@@ -483,9 +483,10 @@ class sncConversion(PFConversion):
 
             list_polyData_Blocks[surface_name] = faces_to_vtkPolyData(loc_nodes,tri,qua)
             
-            if surface_name in self.data.keys():
-                list_polyData_Blocks[surface_name] = data_to_vtkBlock(
-                    list_polyData_Blocks[surface_name],self.data[surface_name][0,:,:],self.vars.keys())
+            if self.data is not None:
+                if surface_name in self.data.keys():
+                    list_polyData_Blocks[surface_name] = data_to_vtkBlock(
+                        list_polyData_Blocks[surface_name],self.data[surface_name][0,:,:],self.vars.keys())
 
         self.vtk_object = list_polyData_Blocks
         
