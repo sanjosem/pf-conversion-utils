@@ -105,3 +105,29 @@ def save_MultiBlock(struct_PolyData, outFile):
     writer.SetFileName(outFile)
     writer.SetInputData(mb)
     writer.Write()
+
+def cut_by_plane(vtk_obj,origin=(0.,0.,0.),norm=(1.,0.,0.)):
+    
+    plane = vtk.vtkPlane()
+    plane.SetOrigin(origin[0],origin[1],origin[2])
+    plane.SetNormal(norm[0],norm[1],norm[2])
+    
+    planeCut = vtk.vtkCutter()
+    planeCut.SetInputData(vtk_obj)
+    planeCut.SetCutFunction(plane)
+    planeCut.Update()
+    
+    return planeCut.GetOutput()
+    
+def find_closest_point(vtk_obj,point=(0.,0.,0.)):
+    
+    pointTree = vtk.vtkKdTreePointLocator()
+    pointTree.SetDataSet(vtk_obj)
+    pointTree.BuildLocator()
+    
+    radius = None
+    if radius is None:
+        vtkId = pointTree.FindClosestPoint(point)
+        pcoord = vtk_obj.GetPoint(vtkId)
+        
+    return vtkId,pcoord

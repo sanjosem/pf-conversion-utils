@@ -99,7 +99,7 @@ class PFConversion:
         f = netcdf.Dataset(self.pfFile, 'r')
             
         if 'ref_frame_indices' in f.variables.keys():
-            nlrfs = f.dimensions['nlrfs']
+            nlrfs = f.dimensions['nlrfs'].size
             if nlrfs == 1:
                 self.rotation=True
                 if self.verbose:
@@ -114,7 +114,6 @@ class PFConversion:
             alpha0 = f.variables['lrf_initial_angular_rotation'][0] + n_rot0
 
             rotation_axis_origin = f.variables['lrf_axis_origin'][0,:]  # axe de rotation
-            print(rotation_axis_origin - self.params['offset_coords'])
             rotation_axis = f.variables['lrf_axis_direction'][0,:]  # axe de rotation
             axis_index = where(rotation_axis)[0][0]
             sign_rotation = rotation_axis[axis_index]

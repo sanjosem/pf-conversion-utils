@@ -34,6 +34,7 @@ class sncConversion(PFConversion):
         self.mesh = None
         self.data = None
         self.vtk_object = None
+        self.probe = None
         
         if self.verbose:
             print('PF file format is: {0:s}'.format(self.format))
@@ -509,3 +510,126 @@ class sncConversion(PFConversion):
         print("Exporting in VTK format:\n  ->  {0:s}".format(outFile))
 
         save_MultiBlock(self.vtk_object,outFile)
+
+    def extract_probe(self,probe_name,probe_coords):
+        
+        from pftools.module_vtk_utils import find_closest_point
+        import numpy as np
+        from pandas import DataFrame
+        import netCDF4 as netcdf
+        
+        if self.vtk_object is None:
+            self.create_vtk()
+            
+        if self.time is None:
+            self.extract_time_info()
+
+        dloc = 1.0e8
+        for surface_name in self.vtk_object.keys():
+            vtk_obj = self.vtk_object[surface_name]
+            vtkId,pcoords = find_closest_point(vtk_obj,point=probe_coords)
+            dist = np.linalg.norm(np.asarray(probe_coords) - np.asarray(pcoords))
+            if dist<dloc:
+                dloc = dist
+                pid = vtkId
+                surfn = surface_name
+                    
+        print('Probe {0:s} found in {1:s} at distance {2:e} m'.format(
+                probe_name,surfn,dloc))
+            
+        glo_id = self.mesh[surfn]['glo_nodes'][pid]
+        lst_face = np.where((self.face_conn['face_vertex_list'] == glo_id).sum(axis=-1))[0]
+        
+        if self.verbose:
+            pc = self.node_coords[glo_id,:]
+            print('Location: ({0:.4e},{1:.4e},{2:.4e})'.format(pc[0],pc[1],pc[2]))
+        
+        data = dict()
+        data['time'] = self.time['time_center']
+        
+        f = netcdf.Dataset(self.pfFile, 'r')
+        tmp = f.variables['measurements'][:,:,lst_face] 
+        f.close()
+        
+        nvars = len(self.vars.keys())
+        
+        # Conversion in SI
+        data_cell = np.zeros((tmp.shape[0],nvars,tmp.shape[-1]))
+        for ivar,var in enumerate(self.vars.keys()):
+            idx = self.vars[var]
+            
+            if var == 'static_pressure':
+                if idx>=0 :
+                    data_cell[:,ivar,:] = ( ( tmp[:,idx,:] + self.params['offset_pressure'] ) 
+                                          * self.params['coeff_press'] )
+                else:
+                    idx = self.vars['density']
+                    data_cell[:,ivar,:] = ( tmp[:,idx,:] * self.params['weight_rho_to_pressure']
+                                     + self.params['offset_pressure'] ) * self.params['coeff_press']
+                                
+            if var == 'density':
+                if idx>=0:
+                    data_cell[:,ivar,:] = tmp[:,idx,:] * self.params['coeff_density'] 
+                else:
+                    idx = self.vars['static_pressure']
+                    data_cell[:,ivar,:]  =  ( tmp[:,idx,:] * self.params['weight_pressure_to_rho']
+                                       * self.params['coeff_density'] )
+            if var in ['x_velocity','y_velocity','z_velocity']:
+                data_cell[:,ivar,:] =  tmp[:,idx,:] * self.params['coeff_vel'] 
+        
+        data_node = np.zeros((tmp.shape[0],nvars))
+        surface_node = 0.0
+        for nf,iface in enumerate(lst_face):
+            face_weight = self.face_conn['face_weight'][iface]
+            data_node[:,:] += data_cell[:,:,nf]*face_weight
+            surface_node += face_weight
+
+        data_node /= surface_node
+        
+        for ivar,var in enumerate(self.vars.keys()):
+            data[var] = data_node[:,ivar]
+        
+        if self.probe is None:
+            self.probe = dict()
+        
+        self.probe[probe_name] = DataFrame(data=data)
+        
+
+    def export_temporal_data(self,casename,dirout,delimiter=' ',index=False,
+                             extension='txt'):
+        """Function to export probe temporal data to a text file. 
+        All quantities will be written in SI units
+
+        Parameters
+        ----------
+        casename : string
+            Name assiciated to the present probe conversion. 
+            The casename is used to build the output file name
+            temporal_<casename>.<extension>
+        dirout : string
+            Absolute path/relative path where the converted file will be written
+        delimiter : char
+            Field delimiter (default is space).
+            If comma ',' is specified the file extension will be 'csv'
+        index : bool
+            Append index of rows as the first column in the text file
+        extension : string
+            Extension of the text file (by default txt)
+
+        """
+
+        import os.path
+
+        if delimiter == ',':
+            ext = 'csv'
+        else:
+            ext = extension
+            
+        if self.probe is None:
+            raise RuntimeError('No probe to export, please use extract_probe')
+        
+        for probe_name in self.probe.keys():
+            outFile = os.path.join(dirout,'temporal_{0:s}_{2:s}.{1:s}'.format(
+                        casename,ext,probe_name))
+            print("Exporting in ascii column format:\n  ->  {0:s}".format(outFile))
+            self.probe[probe_name].to_csv(outFile,sep=delimiter,index=index)
