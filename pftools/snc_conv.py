@@ -474,6 +474,11 @@ class sncConversion(PFConversion):
         from pftools.module_vtk_utils import faces_to_vtkPolyData,data_to_vtkBlock
         import os.path
         
+        if self.mesh is None:
+            raise RuntimeError('Surface mesh need to be triangulated to be generate VTK object')
+            
+        if self.node_cords()
+        
         list_polyData_Blocks = dict()
         for surface_name in self.mesh.keys():
             res = self.mesh[surface_name]
@@ -524,6 +529,9 @@ class sncConversion(PFConversion):
             
         if self.time is None:
             self.extract_time_info()
+            
+        if self.vars is None:
+            self.define_measurement_variables()
 
         dloc = 1.0e8
         for surface_name in self.vtk_object.keys():
