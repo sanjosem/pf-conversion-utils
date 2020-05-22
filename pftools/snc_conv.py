@@ -476,9 +476,7 @@ class sncConversion(PFConversion):
         
         if self.mesh is None:
             raise RuntimeError('Surface mesh need to be triangulated to be generate VTK object')
-            
-        if self.node_cords()
-        
+                    
         list_polyData_Blocks = dict()
         for surface_name in self.mesh.keys():
             res = self.mesh[surface_name]
