@@ -43,7 +43,7 @@ class fncConversion(PFConversion):
 
         """
         import netCDF4 as netcdf
-        from numpy import unique
+        import numpy as np
         
         if self.params is None:
             self.read_conversion_parameters()
@@ -55,7 +55,6 @@ class fncConversion(PFConversion):
             f = netcdf.Dataset(self.pfFile,'r')
             
             ref_frame_indices = f.variables['ref_frame_indices'] # -1 stationnary 0 LRF
-            
             self.domain['rotor'] = np.where(ref_frame_indices[:] == 0)[0]
             self.domain['stator'] = np.where(ref_frame_indices[:] == -1)[0]
 
@@ -75,16 +74,27 @@ class fncConversion(PFConversion):
         import netCDF4 as netcdf
         import numpy as np 
         from copy import deepcopy
+        try:
+            import pftools.fextend.fnc_reader as Ffnc
+            fapi = True
+        except:
+            fapi = False
         
         if self.domain is None:
             self.read_domains()
 
         f = netcdf.Dataset(self.pfFile, 'r')
+        
+        self.params['ncells'] = f.dimensions['npoints'].size
+        self.params['ndims'] = f.dimensions['ndims'].size
 
-        element_coords = f.variables['coords'][()].astype('float')
-        voxel_scales = f.variables['voxel_scales'][()]
+        if not fapi:
+            element_coords = f.variables['coords'][()].astype('float')
+            voxel_scales = f.variables['voxel_scales'][()]
             
         f.close()
+
+        assert self.params['ndims']==3, "Wrong coordinate dimensions"
         
         # Compute cell connectivity
         if self.verbose:
@@ -92,16 +102,13 @@ class fncConversion(PFConversion):
             
         nb_vertex = 8
 
-        self.params['ncells'] = element_coords.shape[0]
-        self.params['ndims'] = element_coords.shape[1]
-        assert self.params['ndims']==3, "Wrong coordinate dimensions"
-        
         if not self.rotation:
             self.domain['stator'] = np.arange(self.params['ncells'])
         
         # Offset coordinates
-        for idim in range(self.params['ndims']):
-            element_coords[:,idim]+=self.params['offset_coords'][idim]
+        if not fapi:
+            for idim in range(self.params['ndims']):
+                element_coords[:,idim]+=self.params['offset_coords'][idim]
                 
         self.cell_coords = dict()
         self.node_coords = dict()
@@ -111,33 +118,46 @@ class fncConversion(PFConversion):
         
         for dom in self.domain.keys():
             lst = self.domain[dom]
-            
-            # scale coordinates
-            self.cell_coords[dom] = element_coords[lst,:] * self.params['coeff_dx']
-            
-            if self.verbose:
-                print('Computing vertices coordinates for {0:s}'.format(dom))
-            dx = 2**(1.0 + voxel_scales[lst])
-            self.volume_cell[dom] = (self.params['coeff_dx']*dx)**3
             nelm = lst.size
+            
             if self.verbose:
                 print("  -> {0:d} elements".format(nelm))
 
-            vertices_coords = np.zeros((nelm * 8, 3))
-            basis = np.eye(3)
-            vx = dx[:,np.newaxis]*basis[:,0][np.newaxis,:]
-            vy = dx[:,np.newaxis]*basis[:,1][np.newaxis,:]
-            vz = dx[:,np.newaxis]*basis[:,2][np.newaxis,:]
+            if self.verbose:
+                print('Computing vertices coordinates for {0:s}'.format(dom))
+            
+            if fapi:
+                cell_volumes,cell_coords,vertices_coords = Ffnc.read_fnc_mesh(self.pfFile,
+                                            self.params['coeff_dx'],self.params['offset_coords'],lst,
+                                            self.params['ncells'])                
+                
+                # scale coordinates
+                self.cell_coords[dom] = cell_coords
+                self.volume_cell[dom] = cell_volumes
+                
+            else:
+                            
+                # scale coordinates
+                self.cell_coords[dom] = element_coords[lst,:] * self.params['coeff_dx']
+                    
+                dx = 2**(1.0 + voxel_scales[lst])
+                self.volume_cell[dom] = (self.params['coeff_dx']*dx)**3
+                
+                vertices_coords = np.zeros((nelm * 8, 3))
+                basis = np.eye(3)
+                vx = dx[:,np.newaxis]*basis[:,0][np.newaxis,:]
+                vy = dx[:,np.newaxis]*basis[:,1][np.newaxis,:]
+                vz = dx[:,np.newaxis]*basis[:,2][np.newaxis,:]
 
-            vertices_coords[0::8, :] = element_coords[lst,:]
-            vertices_coords[1::8, :] = element_coords[lst,:] + vx
-            vertices_coords[2::8, :] = element_coords[lst,:] + vx + vy
-            vertices_coords[3::8, :] = element_coords[lst,:]      + vy
-            vertices_coords[4::8, :] = element_coords[lst,:]           + vz
-            vertices_coords[5::8, :] = element_coords[lst,:] + vx      + vz
-            vertices_coords[6::8, :] = element_coords[lst,:] + vx + vy + vz
-            vertices_coords[7::8, :] = element_coords[lst,:]      + vy + vz
-
+                vertices_coords[0::8, :] = element_coords[lst,:]
+                vertices_coords[1::8, :] = element_coords[lst,:] + vx
+                vertices_coords[2::8, :] = element_coords[lst,:] + vx + vy
+                vertices_coords[3::8, :] = element_coords[lst,:]      + vy
+                vertices_coords[4::8, :] = element_coords[lst,:]           + vz
+                vertices_coords[5::8, :] = element_coords[lst,:] + vx      + vz
+                vertices_coords[6::8, :] = element_coords[lst,:] + vx + vy + vz
+                vertices_coords[7::8, :] = element_coords[lst,:]      + vy + vz
+            
             if self.verbose:
                 print("Compute connectivity")
             
@@ -170,6 +190,11 @@ class fncConversion(PFConversion):
         import netCDF4 as netcdf
         import numpy as np
         import pandas as pd
+        try:
+            import pftools.fextend.fnc_reader as Ffnc
+            fapi = True
+        except:
+            fapi = False
         
         if self.vars is None:
             self.define_measurement_variables()
@@ -180,7 +205,7 @@ class fncConversion(PFConversion):
         # before py2f wrapper
         if not type(frame) == int:
             raise RuntimeError('frame input must be an integer')
-        
+
         
         slicing_instant = slice(frame,frame+1)
         
