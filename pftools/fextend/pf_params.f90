@@ -2,57 +2,65 @@ module pf_params
   
   implicit none
   
-  integer :: nvars
   real*8 :: coeff_dx
-  real*8 :: coeff_dt
+  real*8 :: timestep
   real*8 :: coeff_vel
   real*8 :: coeff_rho
   real*8 :: coeff_press
   real*8 :: offset_press
   real*8 :: weight_p2r
   real*8 :: weight_r2p
-  integer, allocatable, dimension(:) :: var_indices
-  character(len=64), allocatable, dimension(:) :: var_names
-
+  
+  integer*4, parameter :: type_length = 0
+  integer*4, parameter :: type_time = 1
+  integer*4, parameter :: type_pressure = 2
+  integer*4, parameter :: type_pressure_from_density = 20
+  integer*4, parameter :: type_density = 3
+  integer*4, parameter :: type_density_from_pressure = 30
+  integer*4, parameter :: type_velocity = 4
+  
 contains
   
-  subroutine scale_var(scale_type,var_lat,var_SI)
+  subroutine scale_var(scale_type,var_lat,var_SI,n)
     
     integer, intent(in) :: n
-    character(len=64), intent(in) :: scale_type
+    !f2py optional , depend(var_lat) :: n=len(var_lat)
+    integer, intent(in) :: scale_type
     real*8, dimension(n), intent(in) :: var_lat
     real*8, dimension(n), intent(out) :: var_SI
     
     integer:: i
     
-    select case (TRIM(scale_type))
-    case('length')
+    write(*,*) 'Scaling type:', scale_type
+    
+    select case (scale_type)
+    case(type_length)
         do i=1,n
-          var_SI(n) = var_lat(n) * coeff_dx
+          var_SI(i) = var_lat(i) * coeff_dx
         end do 
-    case('time')
+    case(type_time)
         do i=1,n
-          var_SI(n) = var_lat(n) * coeff_dt
+          var_SI(i) = var_lat(i) * timestep
         end do 
-      case('static_pressure')
+      case(type_pressure)
         do i=1,n
-          var_SI(n) = (var_lat(n) + offset_press) * coeff_press
+          var_SI(i) = (var_lat(i) + offset_press) * coeff_press
         end do 
-      case('pressure_from_density')
+      case(type_pressure_from_density)
         do i=1,n
-          var_SI(n) = (var_lat(n) * weight_r2p + offset_press) * coeff_press
+          var_SI(i) = (var_lat(i) * weight_r2p + offset_press) * coeff_press
         end do 
-      case('density')
+      case(type_density)
         do i=1,n
-          var_SI(n) = var_lat(n) * coeff_rho
+          var_SI(i) = var_lat(i) * coeff_rho
         end do 
-      case('density_from_pressure')
+      case(type_density_from_pressure)
         do i=1,n
-          var_SI(n) = var_lat(n) * weight_p2r * coeff_rho
+          var_SI(i) = var_lat(i) * weight_p2r * coeff_rho
         end do 
-      case('x_velocity','y_velocity','z_velocity')
+      case(type_velocity)
         do i=1,n
-          var_SI(n) = var_lat(n) * coeff_vel
+          var_SI(i) = var_lat(i) * coeff_vel
         end do 
     end select
     
