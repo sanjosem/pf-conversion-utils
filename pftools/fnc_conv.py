@@ -34,6 +34,8 @@ class fncConversion(PFConversion):
         self.volume_cell = None
         self.data = None
         self.domain = None
+        self.vtk_object = None
+
 
         if use_fapi is None:
             try:
@@ -406,16 +408,11 @@ class fncConversion(PFConversion):
         fparams.close()
 
 
-    def create_vtk(self,casename,dirout):
-        """Method to export volume mesh for paraview
+    def create_vtk(self):
+        """Method to create VTK volume mesh
 
         Parameters
         ----------
-        casename : string
-            Label of the configuration
-        dirout : string
-            Directory for file export
-
         """
         from pftools.module_vtk_utils import cells_to_vtkUnstruct,data_to_vtkBlock
         
