@@ -43,6 +43,7 @@ if len(liste) == 0:
 
 for fl in liste:
     probe_file = os.path.basename(fl)
+    casename = probe_file.replace('.psnc','').replace('.pfnc','')
 
     print('*** Processing {0:s} ***'.format(probe_file))
     
@@ -51,6 +52,6 @@ for fl in liste:
     else:
         pncConv = pftools.pnc_conv.pncConversion(fl)
                 
-    pncConv.export_temporal_data(probe_file.replace('.psnc','').replace('.pfnc',''),
-                                    uinfo['output_directory'],delimiter=uinfo['delimiter'])
+    pncConv.extract_probe()
+    pncConv.export_temporal_data(casename,uinfo['output_directory'],delimiter=uinfo['delimiter'])
     

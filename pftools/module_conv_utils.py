@@ -39,6 +39,7 @@ class PFConversion:
         self.vars = None
         self.time = None
         self.verbose = verbose
+        self.probe = None
         
         if self.verbose:
             print('PFConversion class instance created for file:\n  {0:s}'.format(pfFile))
@@ -269,4 +270,44 @@ class PFConversion:
                 grot.create_dataset(par, data=self.params[par])
                                 
         fparams.close()
+        
+    def export_temporal_data(self,casename,dirout,delimiter=' ',index=False,
+                                 extension='txt'):
+        """Function to export probe temporal data to a text file. 
+        All quantities will be written in SI units
+
+        Parameters
+        ----------
+        casename : string
+            Name assiciated to the present probe conversion. 
+            The casename is used to build the output file name
+            temporal_<casename>.<extension>
+        dirout : string
+            Absolute path/relative path where the converted file will be written
+        delimiter : char
+            Field delimiter (default is space).
+            If comma ',' is specified the file extension will be 'csv'
+        index : bool
+            Append index of rows as the first column in the text file
+        extension : string
+            Extension of the text file (by default txt)
+
+
+        """
+        import os.path
+
+        if delimiter == ',':
+            ext = 'csv'
+        else:
+            ext = extension
+            
+        if self.probe is None:
+            raise RuntimeError('No probe to export, please use extract_probe')
+            
+        for probe_name in self.probe.keys():
+            outFile = os.path.join(dirout,'temporal_{0:s}_{2:s}.{1:s}'.format(
+                        casename,ext,probe_name))
+            print("Exporting in ascii column format:\n  ->  {0:s}".format(outFile))
+            self.probe[probe_name].to_csv(outFile,sep=delimiter,index=index)
+            
         

@@ -33,7 +33,6 @@ class pncConversion(PFConversion):
             raise RuntimeError('This is not a probe file')
         self.iscale = None
         self.weight = None
-        self.data = None
         
         if self.verbose:
             print('PF file format is: {0:s}'.format(self.format))
@@ -77,7 +76,7 @@ class pncConversion(PFConversion):
                 rad = (intv/pi)**0.5
                 print('  -> Radius: {0:e} m'.format(rad))
 
-    def read_measurement(self):
+    def extract_probe(self):
         """Function that read and convert data as probe data in SI units
         The results is stored in the class instance 
         and there is no input except from the class instance.
@@ -125,44 +124,9 @@ class pncConversion(PFConversion):
             if var in ['x_velocity','y_velocity','z_velocity']:
                 data[var] =  mean_meas[:,idx] * self.params['coeff_vel'] 
         
-        self.data = DataFrame(data=data)
-        
-    def export_temporal_data(self,casename,dirout,delimiter=' ',index=False,
-                                 extension='txt'):
-        """Function to export probe temporal data to a text file. 
-        All quantities will be written in SI units
-
-        Parameters
-        ----------
-        casename : string
-            Name assiciated to the present probe conversion. 
-            The casename is used to build the output file name
-            temporal_<casename>.<extension>
-        dirout : string
-            Absolute path/relative path where the converted file will be written
-        delimiter : char
-            Field delimiter (default is space).
-            If comma ',' is specified the file extension will be 'csv'
-        index : bool
-            Append index of rows as the first column in the text file
-        extension : string
-            Extension of the text file (by default txt)
-
-
-        """
-    
-        import os.path
-
-        if delimiter == ',':
-            ext = 'csv'
-        else:
-            ext = extension
+        if self.probe is None:
+            self.probe = dict()
             
-        if self.data is None:
-            self.read_measurement()
-            
-        outFile = os.path.join(dirout,'temporal_{0:s}.{1:s}'.format(casename,ext))
-        print("Exporting in ascii column format:\n  ->  {0:s}".format(outFile))
-        self.data.to_csv(outFile,sep=delimiter,index=index)
+        self.probe[self.format] = DataFrame(data=data)
         
         
