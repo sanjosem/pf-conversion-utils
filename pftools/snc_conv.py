@@ -25,7 +25,7 @@ class sncConversion(PFConversion):
         Create multiblock VTK format (PolyData)
 
     """
-    def __init__(self,pfFile,verbose=True):
+    def __init__(self,pfFile,verbose=True,use_fapi=None):
         super().__init__(pfFile,verbose)
         self.format = 'surface'
         self.surface_list = None
@@ -37,6 +37,17 @@ class sncConversion(PFConversion):
         
         if self.verbose:
             print('PF file format is: {0:s}'.format(self.format))
+            
+        
+        if use_fapi is None:
+            try:
+                import pftools.fextend.snc_reader as Fsnc
+                self.fapi = True
+            except:
+                self.fapi = False
+        else:
+            self.fapi=use_fapi
+        
 
     def read_surface_names(self):
         """Method to read the surface patchs (called faces) contained in the powerflow file
@@ -87,30 +98,41 @@ class sncConversion(PFConversion):
         """
         
         import netCDF4 as netcdf
-
+        if self.fapi:
+            import pftools.fextend.snc_reader as Fsnc
+            
         f = netcdf.Dataset(self.pfFile, 'r')
-
-        coords=f.variables['vertex_coords'][()]
-        
+        self.params['nnodes'] = f.dimensions['nvertices'].size
+        self.params['ndims'] = f.dimensions['ndims'].size
         f.close()
-        
-        self.params['nnodes'] = coords.shape[0]
-        self.params['ndims'] = coords.shape[1]
         assert self.params['ndims']==3, "Wrong coordinate dimensions"
         
-        # Offset coordinates
-        for idim in range(self.params['ndims']):
-            coords[:,idim]+=self.params['offset_coords'][idim]
-        
-        # scale coordinates    
-        coords *= self.params['coeff_dx']
-        
-        if self.verbose:
-            print('Bounding box in meters:')
-            for idim,coor in enumerate(['x','y','z']):
-                print('  {2:s}: [{0:.3e},{1:.3e}]'.format(coords[:,idim].min(),coords[:,idim].max(),coor))
-                
-        self.node_coords = coords.astype('float')
+        if not self.fapi:
+
+            f = netcdf.Dataset(self.pfFile, 'r')
+            coords=f.variables['vertex_coords'][()]
+            f.close()
+            
+            # Offset coordinates
+            for idim in range(self.params['ndims']):
+                coords[:,idim]+=self.params['offset_coords'][idim]
+            
+            # scale coordinates    
+            coords *= self.params['coeff_dx']
+            
+            if self.verbose:
+                print('Bounding box in meters:')
+                for idim,coor in enumerate(['x','y','z']):
+                    print('  {2:s}: [{0:.3e},{1:.3e}]'.format(coords[:,idim].min(),coords[:,idim].max(),coor))
+                    
+            self.node_coords = coords.astype('float')
+            
+        else:
+            self.node_coords = Fsnc.read_snc_coordinates(self.pfFile,
+                                        self.params['coeff_dx'],
+                                        self.params['offset_coords'],
+                                        self.params['nnodes'])
+            
 
     def read_connectivity(self):
         """Method to read and prepare connectivity.
@@ -120,6 +142,8 @@ class sncConversion(PFConversion):
         
         import netCDF4 as netcdf
         import numpy as np
+        if self.fapi:
+            import pftools.fextend.snc_reader as Fsnc
         
         if self.node_coords is None:
             self.read_coordinates()
@@ -127,49 +151,73 @@ class sncConversion(PFConversion):
         self.face_conn = dict()
 
         f = netcdf.Dataset(self.pfFile, 'r')
-        
-        first_vertex = f.variables['first_vertex_refs'][()]
-        vertex_list = f.variables['vertex_refs']
-        self.params['nfaces'] = first_vertex.size
-        self.params['nvertices'] = vertex_list[:].size
-        
-        vert_per_face = np.zeros((self.params['nfaces'],),dtype='int')
-        vert_per_face[:-1] = first_vertex[1:] - first_vertex[:-1]
-        vert_per_face[-1] = self.params['nvertices'] - first_vertex[-1]
-        max_vertex_per_face = vert_per_face.max()
-        min_vertex_per_face = vert_per_face.min()
-        self.params['min_vertex_per_face'] = min_vertex_per_face
-        self.params['max_vertex_per_face'] = min_vertex_per_face
-
-        if self.verbose:
-            print('Reading connectivity')
-            print('  Total number of faces: {0:d}'.format(self.params['nfaces']))
-            print('  Min/Max vertices per faces: {0:d} {1:d}'.format(min_vertex_per_face,max_vertex_per_face))
-
-        # Compute global connectivity
-        face_vertex_list = np.zeros((self.params['nfaces'],max_vertex_per_face),dtype=np.dtype('int64'))
-        for iface in range(self.params['nfaces']-1):
-            face_vertex_list[iface,0:vert_per_face[iface]]=vertex_list[first_vertex[iface]:first_vertex[iface+1]]
-        face_vertex_list[-1,0:vert_per_face[-1]]=vertex_list[first_vertex[-1]:]
-        
-        self.face_conn['vert_per_face'] = vert_per_face
-        self.face_conn['face_vertex_list'] = face_vertex_list
-        
-        surfel_area = f.variables['surfel_area'][()] * self.params['coeff_dx']**2
-        face_weight = surfel_area / vert_per_face.astype('float')
-
-        node_weight = np.zeros((self.params['nnodes'],))
-        for nvert in range(min_vertex_per_face,max_vertex_per_face+1):
-            lst_face = np.where(vert_per_face == nvert)[0]
-            for iv in range(nvert):
-                node_weight[face_vertex_list[lst_face,iv]] += face_weight[lst_face]
-                
-        self.face_conn['face_weight'] = face_weight
-        self.face_conn['node_weight'] = node_weight
-        self.face_conn['face_area'] = surfel_area
-        self.face_conn['face_norm'] = f.variables['surfel_normal'][()].astype('float')
-        
+        self.params['nfaces'] = f.dimensions['npoints'].size
+        self.params['nvertices'] = f.dimensions['nvertex_refs'].size
         f.close()
+        
+        if not self.fapi:
+        
+            f = netcdf.Dataset(self.pfFile, 'r')
+            first_vertex = f.variables['first_vertex_refs'][()]
+            vertex_list = f.variables['vertex_refs']
+            
+            vert_per_face = np.zeros((self.params['nfaces'],),dtype='int')
+            vert_per_face[:-1] = first_vertex[1:] - first_vertex[:-1]
+            vert_per_face[-1] = self.params['nvertices'] - first_vertex[-1]
+            max_vertex_per_face = vert_per_face.max()
+            min_vertex_per_face = vert_per_face.min()
+            self.params['min_vertex_per_face'] = min_vertex_per_face
+            self.params['max_vertex_per_face'] = min_vertex_per_face
+
+            if self.verbose:
+                print('Reading connectivity')
+                print('  Total number of faces: {0:d}'.format(self.params['nfaces']))
+                print('  Min/Max vertices per faces: {0:d} {1:d}'.format(min_vertex_per_face,max_vertex_per_face))
+
+            # Compute global connectivity
+            face_to_node = np.zeros((self.params['nfaces'],max_vertex_per_face),dtype=np.dtype('int64'))
+            for iface in range(self.params['nfaces']-1):
+                face_to_node[iface,0:vert_per_face[iface]]=vertex_list[first_vertex[iface]:first_vertex[iface+1]]
+            face_to_node[-1,0:vert_per_face[-1]]=vertex_list[first_vertex[-1]:]
+            
+            self.face_conn['vert_per_face'] = vert_per_face
+            self.face_conn['face_to_node'] = face_to_node
+            
+            surfel_area = f.variables['surfel_area'][()] * self.params['coeff_dx']**2
+            face_weight = surfel_area / vert_per_face.astype('float')
+
+            node_weight = np.zeros((self.params['nnodes'],))
+            for nvert in range(min_vertex_per_face,max_vertex_per_face+1):
+                lst_face = np.where(vert_per_face == nvert)[0]
+                for iv in range(nvert):
+                    node_weight[face_to_node[lst_face,iv]] += face_weight[lst_face]
+                    
+            self.face_conn['face_weight'] = face_weight
+            self.face_conn['node_weight'] = node_weight
+            self.face_conn['face_area'] = surfel_area
+            self.face_conn['face_norm'] = f.variables['surfel_normal'][()].astype('float')
+            f.close()
+            
+        else:
+            min_nv,max_nv,self.face_conn['vert_per_face'] = Fsnc.compute_vertex_nb(
+                                                                    self.pfFile,self.params['nfaces'],
+                                                                    self.params['nvertices'])
+            
+            self.face_conn['face_to_node'] = Fsnc.create_initial_connectivity(
+                                                    self.pfFile,self.face_conn['vert_per_face'],
+                                                    max_nv,nfaces=self.params['nfaces'])
+                                                    
+            assert self.face_conn['face_to_node'].shape==(self.params['nfaces'],max_nv), "Wrong shape"
+                                                                                                        
+            self.face_conn['face_weight'],self.face_conn['node_weight'],self.face_conn['face_area'] = \
+                    Fsnc.compute_face_node_weight(self.pfFile,self.params['coeff_dx'],
+                                                  self.face_conn['vert_per_face'],
+                                                  self.face_conn['face_to_node'],self.params['nnodes'],
+                                                  self.params['nfaces'],max_nv)
+
+            self.face_conn['face_norm'] = Fsnc.read_face_norm(self.pfFile,
+                                        self.params['nfaces'])
+                                        
         
     def triangulate_surface(self,surface_name,face_list,min_threshold=1.0e-15):
         """Method to generate mesh of the given surface.
@@ -188,11 +236,13 @@ class sncConversion(PFConversion):
 
         """
         
+        
         import netCDF4 as netcdf
         import numpy as np
         from scipy.spatial.distance import pdist, squareform
         from copy import deepcopy
         from scipy.spatial.qhull import Delaunay,QhullError 
+        import time
 
         
         if self.surface_list is None:
@@ -220,11 +270,11 @@ class sncConversion(PFConversion):
         
         
         vert_per_face = self.face_conn['vert_per_face']
-        face_vertex_list = self.face_conn['face_vertex_list']
+        face_to_node = self.face_conn['face_to_node']
         
 
         if surf_nfaces>0:
-
+            tic = time.perf_counter()
             tri_elm=np.zeros((4*surf_nfaces,3),dtype=np.dtype('int64')) # Larger array to accept triangulation
 
             tri_faces  = np.where(vert_per_face[lst_face]==3)[0] # Existing triangles
@@ -235,8 +285,8 @@ class sncConversion(PFConversion):
             nquad = len(quad_faces)
             nbad  = len(bad_faces)
 
-            tri_elm[0:ntri,:] = face_vertex_list[lst_face[tri_faces],:3].astype('int64')
-            quad_elm = face_vertex_list[lst_face[quad_faces],:4].astype('int64')
+            tri_elm[0:ntri,:] = face_to_node[lst_face[tri_faces],:3].astype('int64')
+            quad_elm = face_to_node[lst_face[quad_faces],:4].astype('int64')
 
             if self.verbose:
                 print("  Initial facets:")
@@ -248,11 +298,16 @@ class sncConversion(PFConversion):
             count_null_surface = 0
             smax_ignore = 0.
             rel_err_area = 0.
+            toc = time.perf_counter()
+            print('    Preparation: {0:f} s'.format(toc-tic))
 
+            mean_time = 0.0
             for glo_face_num in lst_face[bad_faces]:
                 
+                tic = time.perf_counter()
+                
                 nvert = vert_per_face[glo_face_num]
-                glo_vertex_list=face_vertex_list[glo_face_num,:nvert]
+                glo_vertex_list=face_to_node[glo_face_num,:nvert]
                 point_list=self.node_coords[glo_vertex_list,:]
                 npoints = point_list.shape[0]
 
@@ -290,13 +345,18 @@ class sncConversion(PFConversion):
                 except QhullError:
                     pass
                     count_null_surface+=1
-                    print('No connectivity found for face #{0:d}'.format(glo_face_num))
-
+                    if self.verbose:
+                        print('! No connectivity found for face #{0:d}'.format(glo_face_num))
+                    
+                toc = time.perf_counter()
+                mean_time += toc-tic
+            mean_time /= float(nbad)
+            print('    Averaged time per bad face: {0:f} s'.format(mean_time))
                     
             if rel_err_area > 5.0e-3:
-                print('  Max relative difference in facet area after triangulation: {0:.2f} %'.format(100.*rel_err_area))
+                print('    Max relative difference in facet area after triangulation: {0:.2f} %'.format(100.*rel_err_area))
             if count_null_surface>0:
-                print("  Number of facet that have been ignored: {0:d}".format(count_null_surface))
+                print("    Number of facet that have been ignored: {0:d}".format(count_null_surface))
 
             # remove the additional lines
             tri_elm = np.delete(tri_elm,slice(ntri,None),0)
@@ -400,7 +460,7 @@ class sncConversion(PFConversion):
         for nf,iface in enumerate(lst_face):
             nvert = self.face_conn['vert_per_face'][iface]
             face_weight = self.face_conn['face_weight'][iface]
-            glo_nodes = self.face_conn['face_vertex_list'][iface,:nvert]
+            glo_nodes = self.face_conn['face_to_node'][iface,:nvert]
             data_node[:,:,glo_nodes] += data_cell[:,:,nf][:,:,np.newaxis]*face_weight
             surface_node[glo_nodes] += face_weight
 
@@ -435,18 +495,15 @@ class sncConversion(PFConversion):
 
         """
         import h5py
-        import os.path
-        
-        super().save_parameters(casename,dirout)
 
-        outFile = os.path.join(dirout,'param_pf_{0:s}.hdf5'.format(casename))
-        print("Adding surface mesh convertion arrays:\n  ->  {0:s}".format(outFile))
+        outFile = super().save_parameters(casename,dirout)
+        print("Adding volume mesh convertion arrays into:\n  ->  {0:s}".format(outFile))
         
         fparams = h5py.File(outFile,'a')
         if self.face_conn is not None:
             gcon = fparams.create_group("connectivity")
             gcon.create_dataset('glo_vertex_number', data=self.face_conn['vert_per_face'])
-            gcon.create_dataset('glo_face_vertex_list', data=self.face_conn['face_vertex_list'])
+            gcon.create_dataset('glo_face_to_node', data=self.face_conn['face_to_node'])
             gcon.create_dataset('glo_node_surface', data=self.face_conn['node_weight'])
             gcon.create_dataset('glo_face_weight', data=self.face_conn['face_weight'])
             fparams.flush()
@@ -457,14 +514,60 @@ class sncConversion(PFConversion):
             fparams.flush()
 
         if self.mesh is not None:
+            grp = fparams.create_group('surface_name')
             for surface_name in self.mesh.keys():
+                subgrp = grp.create_group(surface_name)
                 res = self.mesh[surface_name]
-                subgrp = gcon.create_group('surface_name')
                 subgrp.create_dataset('lst_faces', data=res['glo_faces']) #, dtype='i8')
                 subgrp.create_dataset('glo_node_list', data=res['glo_nodes'])
+                fparams.flush()
             
         fparams.close()
+        return outFile
 
+    def load_parameters(self,h5file):
+
+        import h5py
+        
+        pfFile = self.pfFile
+        verbosity = self.verbose
+         
+        self.__init__(pfFile,verbose=verbosity)
+        
+        super().load_parameters(h5file)
+        
+        fparams = h5py.File(h5file,'r')
+            
+        print("Loading the snc connectivity and geometry file:\n  ->  {0:s}".format(h5file))
+
+        if not fparams.get('connectivity',getclass=True) is None:
+            if fparams.get('connectivity',getclass=True) == h5py.Group:
+                self.face_conn = dict()
+                grp = fparams['connectivity'.format(dom)]
+                for par in grp.keys():
+                    if par == 'glo_vertex_number':
+                        self.face_conn['vert_per_face'] = grp['glo_vertex_number'][()]
+                    elif par == 'glo_face_to_node':
+                        self.face_conn['face_to_node'] = grp['glo_face_to_node'][()]
+                    elif par == 'glo_node_surface':
+                        self.face_conn['node_weight'] = grp['glo_node_surface'][()]
+                    elif par == 'glo_face_weight':
+                        self.face_conn['face_weight'] = grp['glo_face_weight'][()]
+                        
+        if not fparams.get('coordinates/node_coords',getclass=True) is None:
+            if fparams.get('coordinates/node_coords',getclass=True) == h5py.Dataset:
+                self.node_coords = fparams['coordinates/node_coords'][()]
+
+        if not fparams.get('surface_name',getclass=True) is None:
+            if fparams.get('surface_name',getclass=True) == h5py.Dataset:
+                self.mesh = dict()
+                for key in fparams['surface_name'].keys():
+                    if fparams.get('surface_name/{0:s}'.format(key),getclass=True) == h5py.Dataset:
+                        self.mesh[key] = dict()
+                        self.mesh[key]['glo_faces'] = fparams['surface_name/{0:s}/lst_faces'.format(key)][()]
+                        self.mesh[key]['glo_nodes'] = fparams['surface_name/{0:s}/glo_node_list'.format(key)][()]
+                        
+        fparams.close()
 
     def create_vtk(self):
         """Method to create vtk object and store it in the class instance
@@ -544,7 +647,7 @@ class sncConversion(PFConversion):
                 probe_name,surfn,dloc))
             
         glo_id = self.mesh[surfn]['glo_nodes'][pid]
-        lst_face = np.where((self.face_conn['face_vertex_list'] == glo_id).sum(axis=-1))[0]
+        lst_face = np.where((self.face_conn['face_to_node'] == glo_id).sum(axis=-1))[0]
         
         if self.verbose:
             pc = self.node_coords[glo_id,:]

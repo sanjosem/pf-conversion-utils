@@ -377,36 +377,69 @@ class fncConversion(PFConversion):
 
         """
         import h5py
-        import os.path
         
-        super().save_parameters(casename,dirout)
-
-        outFile = os.path.join(dirout,'param_pf_{0:s}.hdf5'.format(casename))
-        print("Adding surface mesh convertion arrays:\n  ->  {0:s}".format(outFile))
+        outFile = super().save_parameters(casename,dirout)
+        print("Adding volume mesh convertion arrays into:\n  ->  {0:s}".format(outFile))
         
         fparams = h5py.File(outFile,'a')
-        if self.face_conn is not None:
-            gcon = fparams.create_group("connectivity")
-            gcon.create_dataset('glo_vertex_number', data=self.face_conn['vert_per_face'])
-            gcon.create_dataset('glo_face_vertex_list', data=self.face_conn['face_vertex_list'])
-            gcon.create_dataset('glo_node_surface', data=self.face_conn['node_weight'])
-            gcon.create_dataset('glo_face_weight', data=self.face_conn['face_weight'])
-            fparams.flush()
-
-        if self.node_coords is not None:
-            geo = fparams.create_group("coordinates")
-            geo.create_dataset('node_coords', data=self.node_coords)
-            fparams.flush()
-
-        if self.mesh is not None:
-            for surface_name in self.mesh.keys():
-                res = self.mesh[surface_name]
-                subgrp = gcon.create_group('surface_name')
-                subgrp.create_dataset('lst_faces', data=res['glo_faces']) #, dtype='i8')
-                subgrp.create_dataset('glo_node_list', data=res['glo_nodes'])
+        if self.domain is not None and self.vertex_to_node is not None:
+            gdom = fparams.create_group("domains")
+            for dom in self.domain.keys():
+                gcur = gdom.create_group(dom)
+                gcur.create_dataset('glo_cell_indices', data=self.domain[dom])
+                gcur.create_dataset('cell_coords', data=self.cell_coords[dom])
+                gcur.create_dataset('volume_cell', data=self.volume_cell[dom])
+                gcur.create_dataset('node_coords', data=self.node_coords[dom])
+                gcur.create_dataset('connectivity', data=self.cell_conn[dom])
+                gcur.create_dataset('vertex_to_node', data=self.vertex_to_node[dom])
+                
+                fparams.flush()
             
         fparams.close()
+        return outFile
 
+
+    def load_parameters(self,h5file):
+
+        import h5py
+        
+        pfFile = self.pfFile
+        verbosity = self.verbose
+        fapi = self.fapi
+         
+        self.__init__(pfFile,verbose=verbosity,use_fapi=fapi)
+        
+        super().load_parameters(h5file)
+        
+        fparams = h5py.File(h5file,'r')
+            
+        print("Loading the fnc connectivity and geometry file:\n  ->  {0:s}".format(h5file))
+                    
+        if fparams.get('domains',getclass=True) is None:
+            RuntimeError('No domains group file, {0:s} is is not valid for fnc'.format(self.format))
+
+        if not fparams.get('domains',getclass=True) is None:
+            if fparams.get('domains',getclass=True) == h5py.Group:
+                self.domain = dict()
+                self.cell_coords = dict()
+                self.volume_cell = dict()
+                self.node_coords = dict()
+                self.cell_conn = dict()
+                self.vertex_to_node = dict()
+                for dom in ['stator','rotor']:
+                    if not fparams.get('domains/{0:s}'.format(dom),getclass=True) is None:
+                        if fparams.get('domains/{0:s}'.format(dom),getclass=True) == h5py.Group:
+                        
+                            grp = fparams['domains/{0:s}'.format(dom)]
+                            self.domain[dom] = grp['glo_cell_indices'][()]
+                            self.cell_coords[dom] = grp['cell_coords'][()]
+                            self.volume_cell[dom] = grp['volume_cell'][()]
+                            self.node_coords[dom] = grp['node_coords'][()]
+                            self.cell_conn[dom] = grp['connectivity'][()]
+                            self.vertex_to_node[dom] = grp['vertex_to_node'][()]
+                                            
+                        
+        fparams.close()
 
     def create_vtk(self):
         """Method to create VTK volume mesh

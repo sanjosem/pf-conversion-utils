@@ -248,6 +248,7 @@ class PFConversion:
         """
         import h5py
         import os.path
+        from numpy import array
         
         
         outFile = os.path.join(dirout,'param_pf_{0:s}.hdf5'.format(casename))
@@ -257,6 +258,9 @@ class PFConversion:
           param_list = self.params.keys()
 
         fparams = h5py.File(outFile,'w')
+        
+        fparams.create_dataset('filename',data=self.pfFile)
+        fparams.create_dataset('format',data=self.format)
 
         grp = fparams.create_group("constants")
         
@@ -268,8 +272,76 @@ class PFConversion:
             grot = grp.create_group("rotation")
             for par in ['omega','init_angle']:
                 grot.create_dataset(par, data=self.params[par])
+                
+        if self.vars is not None:
+            gvar = fparams.create_group("variables")
+            varnames = []
+            varidx = []
+            for var in self.vars.keys():
+                varnames.append(var)
+                varidx.append(self.vars[var])
+            gvar.create_dataset('names',data=array(varnames,dtype='S'))
+            gvar.create_dataset('indices',data=array(varidx))
+            
+        if self.time is not None:
+            gtime = fparams.create_group("time")
+            for par in self.time.keys():
+                gtime.create_dataset(par,data=self.time[par])
                                 
         fparams.close()
+        return outFile
+        
+    def load_parameters(self,h5file):
+        
+        import h5py
+        
+        fparams = h5py.File(h5file,'r')
+        
+        if not self.pfFile == fparams['filename'][()]:
+            RuntimeError('Parameters do not correspond to present analysed file {0:s}'.format(self.pfFile))
+        if not self.format == fparams['format'][()]:
+            RuntimeError('Parameters do not correspond to present analysed file format {0:s}'.format(self.format))
+            
+        print("Loading the convertion parameter file:\n  ->  {0:s}".format(h5file))
+                    
+        if fparams.get('constants',getclass=True) is None:
+            RuntimeError('No constants group file, {0:s} is an invalid convertion parameter file'.format(self.format))
+        else:
+            if not fparams.get('constants',getclass=True) == h5py.Group:
+                RuntimeError('No constants group file, {0:s} is an invalid convertion parameter file'.format(self.format))
+        
+        grp = fparams["constants"]
+        self.params = dict()
+        for par in list(grp.keys()):
+            if grp.get(par,getclass=True) == h5py.Dataset:
+                self.params[par] = grp[par][()]
+            elif par == 'rotation':
+                self.rotation = True
+                grot = fparams["constants/rotation"]
+                for key in list(grot.keys()):
+                    if grot.get(key,getclass=True) == h5py.Dataset:
+                        self.params[key] = grot[key][()]
+
+        if not fparams.get('variables',getclass=True) is None:
+            if fparams.get('variables',getclass=True) == h5py.Group:
+            
+                grp = fparams["variables"]
+                varnames = grp['names'][()]
+                varidx = grp['indices'][()]
+                self.vars = dict()
+                
+                for name, idx in zip(varnames,varidx):
+                    self.vars[name.decode('utf-8')] = idx
+
+        if not fparams.get('time',getclass=True) is None:
+            if fparams.get('time',getclass=True) == h5py.Group:
+                grp = fparams["time"]
+                self.time = dict()
+                for par in list(grp.keys()):
+                    self.time[par] = grp[par][()]
+                        
+        fparams.close()
+        
         
     def export_temporal_data(self,casename,dirout,delimiter=' ',index=False,
                                  extension='txt'):
