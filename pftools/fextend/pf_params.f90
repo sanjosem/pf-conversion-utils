@@ -55,6 +55,8 @@ contains
           var_SI(i) = var_lat(i) * coeff_rho
         end do 
       case(type_density_from_pressure)
+        write(*,*) weight_p2r
+        write(*,*) coeff_rho
         do i=1,n
           var_SI(i) = var_lat(i) * weight_p2r * coeff_rho
         end do 

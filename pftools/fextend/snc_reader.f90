@@ -260,8 +260,8 @@ subroutine create_initial_connectivity(pfFile,vert_per_face,max_nv,nfaces,face_t
 end subroutine create_initial_connectivity
 
 
-subroutine compute_face_node_weight(pfFile,coeff_dx,vert_per_face,face_to_node,nnodes,nfaces,max_nv,face_weight, &
-                        node_weight,face_area)
+subroutine compute_face_node_weight(pfFile,coeff_dx,vert_per_face,face_to_node,nnodes,nfaces, &
+  max_nv,face_weight, node_weight,face_area)
   
   use netcdf
   implicit none
@@ -433,6 +433,201 @@ subroutine read_face_norm(pfFile,nfaces,face_norm)
   ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
   if (ncerr /= NF90_NOERR) stop
   
-  
-
 end subroutine read_face_norm
+
+subroutine read_snc_frame(pfFile,frame_number,nnodes,face_selection,node_selection, &
+                face_weight, face_to_node,vert_per_face,read_indices,scale_types, &
+                data_sel_node,sel_nfaces,sel_nnodes,nvars,nfaces,max_nv)
+  
+  use netcdf
+  use pf_params
+  implicit none
+  
+  integer, intent(in) :: frame_number
+  integer, intent(in) :: nnodes
+  integer, intent(in) :: nfaces
+!f2py optional , depend(vert_per_face) :: nfaces=len(vert_per_face)
+  integer, intent(in) :: max_nv
+!f2py optional , depend(face_to_node) :: max_nv=size(face_to_node,dim=2)
+  integer, intent(in) :: sel_nfaces
+!f2py optional , depend(face_selection) :: sel_nfaces=len(face_selection)
+  integer, intent(in) :: sel_nnodes
+!f2py optional , depend(node_selection) :: sel_nnodes=len(node_selection)
+  integer, intent(in) :: nvars
+!f2py optional , depend(read_indices) :: nvars=len(read_indices)
+  integer*4, dimension(sel_nfaces), intent(in) :: face_selection
+  integer*4, dimension(sel_nnodes), intent(in) :: node_selection
+  integer*4, dimension(nfaces,max_nv), intent(in) :: face_to_node
+  integer*4, dimension(nfaces), intent(in) :: vert_per_face
+  real*8, dimension(nfaces), intent(in) :: face_weight
+  integer, dimension(nvars), intent(in) :: read_indices
+  integer, dimension(nvars), intent(in) :: scale_types
+  character(len=256),intent(in) :: pfFile 
+  real*8, dimension(nvars,sel_nnodes), intent(out) :: data_sel_node
+  
+  ! Local variables
+
+  logical :: pf_read_debug
+  
+  integer :: ncid,ncerr,measid
+  integer :: rank,k,idx,iv,ivar,nvert
+  integer*4 :: no, glo_no,nf,glo_face
+  integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
+  integer, dimension(:), allocatable :: idims,start,count
+  real*8 :: eps, iweight,min_val,max_val,mean_val,mean2_val,std_val
+  character(len=256) :: dim_name
+  real*8, allocatable, dimension(:) :: tmp, tmp_s, node_weight
+  real*8, allocatable, dimension(:,:) :: buffer
+  real*8, allocatable, dimension(:,:) :: data_face, data_node
+  
+  
+  pf_read_debug = .TRUE.
+  
+  ncerr = nf90_open(pfFile, NF90_NOWRITE, ncid)
+  ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+  if (ncerr /= NF90_NOERR) stop
+
+  ncerr = nf90_inq_varid(ncid, "measurements", measid)
+  ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+  if (ncerr /= NF90_NOERR) stop
+
+  ncerr = nf90_inquire_variable(ncid, measid, ndims = rank)
+  ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+  if (ncerr /= NF90_NOERR) stop
+
+  if (rank/=3) then
+    write(*,*) "Expecting array of rank 3 for measurements"
+    stop
+  endif
+  
+  ncerr = nf90_inquire_variable(ncid, measid, dimids = meas_dim_ids(1:rank))
+  ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+  if (ncerr /= NF90_NOERR) stop
+  
+  allocate(idims(rank))
+  
+  do k=1,rank
+    ncerr = nf90_inquire_dimension(ncid, meas_dim_ids(k), len = idims(k), name = dim_name)
+    ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+    if (ncerr /= NF90_NOERR) stop
+    if (pf_read_debug) write(*,'(A,1X,I3,1X,A,1X,A,1X,A,I9)') 'dimension',k,':',trim(dim_name),':',idims(k)
+  enddo
+  
+  if (idims(1)/=nfaces) then
+    write(*,'(A,1X,I9)') "Expecting Number of faces:",nfaces
+    stop
+  endif
+    
+  allocate(start(rank))
+  allocate(count(rank))
+  
+  allocate(buffer(idims(1),idims(2)))
+  
+  start=(/1,1,frame_number+1/) ! C to F numbering
+  count=(/idims(1),idims(2),1/)
+
+  ncerr = nf90_get_var(ncid, measid, buffer,start = start, count=count )
+  ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+  if (ncerr /= NF90_NOERR) stop
+  
+  deallocate(start)
+  deallocate(idims)
+  deallocate(count)
+  
+  ncerr = nf90_close(ncid)
+  ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+  if (ncerr /= NF90_NOERR) stop
+  
+  if (pf_read_debug) write(*,*) 'allocate data face'
+  
+  allocate(tmp(sel_nfaces))
+  allocate(tmp_s(sel_nfaces))
+  allocate(data_face(sel_nfaces,nvars))
+  
+  do ivar = 1,nvars
+    
+    if (pf_read_debug) write(*,*) 'scaling ivar=',ivar
+    
+    ! C to F index
+    idx = read_indices(ivar) + 1 
+    
+    if (pf_read_debug) write(*,*) 'corresponding idx=',idx
+    
+    do nf = 1,sel_nfaces
+      glo_face = node_selection(nf) + 1  ! C to F numbering
+      tmp(nf) = buffer(glo_face,idx)
+    enddo
+    
+    if (pf_read_debug) write(*,*) 'tmp is ready'
+    
+    call scale_var(scale_types(ivar),tmp,tmp_s,sel_nfaces)
+    do nf = 1,sel_nfaces
+      data_face(nf,ivar) = tmp_s(nf)
+    enddo
+    
+    if (pf_read_debug) write(*,*) 'face data is scaled'
+      
+  enddo
+  
+  if (pf_read_debug) write(*,*) 'scatter to vertices'
+  
+  allocate(node_weight(nnodes))
+  allocate(data_node(nvars,nnodes))
+  
+  if (pf_read_debug) write(*,*) 'Initialize data_node and node_weight'
+  data_node(:,:) = 0.0d0
+  node_weight(:) = 0.0d0
+  
+  eps = 1.0e5
+  do nf = 1,sel_nfaces
+    glo_face = face_selection(nf) + 1 ! C to F numbering
+    nvert = vert_per_face(glo_face)
+    do iv = 1, nvert
+      no = face_to_node(glo_face,iv) + 1 ! C to F numbering
+      do ivar = 1,nvars
+        data_node(ivar,no) = data_node(ivar,no) + data_face(nf,ivar)*face_weight(glo_face)
+      enddo
+      node_weight(no) = node_weight(no) + face_weight(glo_face)
+    enddo
+  enddo
+  
+  eps = minval(face_weight)*0.1
+  if (pf_read_debug) write(*,*) 'gather to node'
+  if (pf_read_debug) write(*,*) 'eps=',eps
+  
+  do no=1,sel_nnodes
+    glo_no = node_selection(no) + 1 ! C to F numbering
+    iweight =  1.0d0 / max(node_weight(glo_no),eps)
+    do ivar = 1,nvars
+      data_sel_node(ivar,no) = data_node(ivar,glo_no) * iweight
+    enddo
+  enddo
+  
+  if (pf_read_debug) then
+    do ivar = 1,nvars
+      min_val =1.0d8
+      max_val =-1.0d8
+      mean_val = 0.0d0
+      mean2_val = 0.0d0
+      do no=1,sel_nnodes
+        min_val = min(data_sel_node(ivar,no),min_val)
+        max_val = max(data_sel_node(ivar,no),max_val)
+        mean_val = mean_val + data_sel_node(ivar,no)
+        mean2_val = mean2_val + data_sel_node(ivar,no)**2
+      enddo
+      mean_val = mean_val/nnodes
+      mean2_val = mean2_val/nnodes
+      std_val = sqrt(mean2_val-mean_val*mean_val)
+      write(*,'(A,I1,1X,A,E16.8,1X,A,E16.8,A)') 'ivar=',ivar,'(min=',min_val,' max=',max_val,')'
+      write(*,'(A,I1,1X,A,E16.8,1X,A,E16.8,A)') 'ivar=',ivar,'(mean=',mean_val,'std=',std_val,')'
+    enddo
+  endif
+  
+  deallocate(data_face)
+  deallocate(data_node)
+  deallocate(node_weight)
+  deallocate(buffer)
+  deallocate(tmp)
+  deallocate(tmp_s)
+  
+end subroutine read_snc_frame

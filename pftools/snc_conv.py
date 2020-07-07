@@ -26,7 +26,7 @@ class sncConversion(PFConversion):
 
     """
     def __init__(self,pfFile,verbose=True,use_fapi=None):
-        super().__init__(pfFile,verbose)
+        super().__init__(pfFile,verbose=verbose)
         self.format = 'surface'
         self.surface_list = None
         self.node_coords = None
@@ -100,6 +100,9 @@ class sncConversion(PFConversion):
         import netCDF4 as netcdf
         if self.fapi:
             import pftools.fextend.snc_reader as Fsnc
+        
+        if self.verbose:
+            print('Reading node coordinates')
             
         f = netcdf.Dataset(self.pfFile, 'r')
         self.params['nnodes'] = f.dimensions['nvertices'].size
@@ -117,7 +120,7 @@ class sncConversion(PFConversion):
             for idim in range(self.params['ndims']):
                 coords[:,idim]+=self.params['offset_coords'][idim]
             
-            # scale coordinates    
+            # scale coordinates
             coords *= self.params['coeff_dx']
             
             if self.verbose:
@@ -128,10 +131,8 @@ class sncConversion(PFConversion):
             self.node_coords = coords.astype('float')
             
         else:
-            self.node_coords = Fsnc.read_snc_coordinates(self.pfFile,
-                                        self.params['coeff_dx'],
-                                        self.params['offset_coords'],
-                                        self.params['nnodes'])
+            self.node_coords = Fsnc.read_snc_coordinates(self.pfFile,self.params['coeff_dx'],
+                                        self.params['offset_coords'],nnodes=self.params['nnodes'])
             
 
     def read_connectivity(self):
@@ -167,7 +168,7 @@ class sncConversion(PFConversion):
             max_vertex_per_face = vert_per_face.max()
             min_vertex_per_face = vert_per_face.min()
             self.params['min_vertex_per_face'] = min_vertex_per_face
-            self.params['max_vertex_per_face'] = min_vertex_per_face
+            self.params['max_vertex_per_face'] = max_vertex_per_face
 
             if self.verbose:
                 print('Reading connectivity')
@@ -202,6 +203,10 @@ class sncConversion(PFConversion):
             min_nv,max_nv,self.face_conn['vert_per_face'] = Fsnc.compute_vertex_nb(
                                                                     self.pfFile,self.params['nfaces'],
                                                                     self.params['nvertices'])
+                                                                    
+                                                                    
+            self.params['min_vertex_per_face'] = min_nv
+            self.params['max_vertex_per_face'] = max_nv
             
             self.face_conn['face_to_node'] = Fsnc.create_initial_connectivity(
                                                     self.pfFile,self.face_conn['vert_per_face'],
@@ -390,6 +395,8 @@ class sncConversion(PFConversion):
         import netCDF4 as netcdf
         import numpy as np
         import pandas as pd
+        if self.fapi:
+            import pftools.fextend.snc_reader as Fsnc
         
         if self.vars is None:
             self.define_measurement_variables()
@@ -409,79 +416,149 @@ class sncConversion(PFConversion):
         
         print('Converting data of \'{0:s}\' surface'.format(surface_name))
         
-        slicing_instant = slice(frame,frame+1)
-        
-        nvars = len(self.vars.keys())
-        
         lst_face = self.mesh[surface_name]['glo_faces']
-        vert_per_face = self.face_conn['vert_per_face'][lst_face]
-        
-        # Get data (selected faces, selected variables)
-        f = netcdf.Dataset(self.pfFile, 'r')
-        tmp = f.variables['measurements'][slicing_instant,:,lst_face]
-        f.close()
-
-        # Conversion in SI
-        data_cell = np.zeros((tmp.shape[0],nvars,tmp.shape[-1]))
-        for ivar,var in enumerate(self.vars.keys()):
-            idx = self.vars[var]
-            
-            if var == 'static_pressure':
-                if idx>=0 :
-                    data_cell[:,ivar,:] = ( ( tmp[:,idx,:] + self.params['offset_pressure'] ) 
-                                          * self.params['coeff_press'] )
-                else:
-                    idx = self.vars['density']
-                    data_cell[:,ivar,:] = ( tmp[:,idx,:] * self.params['weight_rho_to_pressure']
-                                     + self.params['offset_pressure'] ) * self.params['coeff_press']
-                                
-            if var == 'density':
-                if idx>=0:
-                    data_cell[:,ivar,:] = tmp[:,idx,:] * self.params['coeff_density'] 
-                else:
-                    idx = self.vars['static_pressure']
-                    data_cell[:,ivar,:]  =  ( tmp[:,idx,:] * self.params['weight_pressure_to_rho']
-                                       * self.params['coeff_density'] )
-            if var in ['x_velocity','y_velocity','z_velocity']:
-                data_cell[:,ivar,:] =  tmp[:,idx,:] * self.params['coeff_vel'] 
-                
-        if self.verbose:
-            stats = pd.DataFrame(data=data_cell.mean(axis=-1),columns=self.vars.keys())
-            print('  -> Stats (cell)')
-            print(stats)
-
-        ninst,nvars,ncells = data_cell.shape
-        nnodes = self.params['nnodes']
-        
-        # Scatter / Gather operation
-        data_node = np.zeros((ninst,nvars,nnodes))
-        surface_node = np.zeros((nnodes,))
-        
-        for nf,iface in enumerate(lst_face):
-            nvert = self.face_conn['vert_per_face'][iface]
-            face_weight = self.face_conn['face_weight'][iface]
-            glo_nodes = self.face_conn['face_to_node'][iface,:nvert]
-            data_node[:,:,glo_nodes] += data_cell[:,:,nf][:,:,np.newaxis]*face_weight
-            surface_node[glo_nodes] += face_weight
-
-        # To avoid divide by 0 error
-        eps = self.face_conn['face_area'].min()/100.
-        surface_node[surface_node<eps] = eps
-        # Scale
-        data_node = data_node/surface_node[np.newaxis,np.newaxis,:]
-        
-        # Storage
-        if self.data is None:
-            self.data = dict()
-            
         lst_node = self.mesh[surface_name]['glo_nodes']
-        self.data[surface_name] = data_node[:,:,lst_node]
 
+        
+        if not self.fapi:
+            slicing_instant = slice(frame,frame+1)
+            
+            nvars = len(self.vars.keys())
+            
+            
+            vert_per_face = self.face_conn['vert_per_face'][lst_face]
+            
+            # Get data (selected faces, selected variables)
+            f = netcdf.Dataset(self.pfFile, 'r')
+            tmp = f.variables['measurements'][slicing_instant,:,lst_face]
+            f.close()
+
+            # Conversion in SI
+            data_cell = np.zeros((tmp.shape[0],nvars,tmp.shape[-1]))
+            for ivar,var in enumerate(self.vars.keys()):
+                idx = self.vars[var]
+                
+                if var == 'static_pressure':
+                    if idx>=0 :
+                        data_cell[:,ivar,:] = ( ( tmp[:,idx,:] + self.params['offset_pressure'] ) 
+                                              * self.params['coeff_press'] )
+                    else:
+                        idx = self.vars['density']
+                        data_cell[:,ivar,:] = ( tmp[:,idx,:] * self.params['weight_rho_to_pressure']
+                                         + self.params['offset_pressure'] ) * self.params['coeff_press']
+                                    
+                if var == 'density':
+                    if idx>=0:
+                        data_cell[:,ivar,:] = tmp[:,idx,:] * self.params['coeff_density'] 
+                    else:
+                        idx = self.vars['static_pressure']
+                        data_cell[:,ivar,:]  =  ( tmp[:,idx,:] * self.params['weight_pressure_to_rho']
+                                           * self.params['coeff_density'] )
+                if var in ['x_velocity','y_velocity','z_velocity']:
+                    data_cell[:,ivar,:] =  tmp[:,idx,:] * self.params['coeff_vel'] 
+                    
+            if self.verbose:
+                stats = pd.DataFrame(data=data_cell.mean(axis=-1),columns=self.vars.keys())
+                print('  -> Stats (cell)')
+                print(stats)
+
+            ninst,nvars,ncells = data_cell.shape
+            nnodes = self.params['nnodes']
+            
+            # Scatter / Gather operation
+            data_node = np.zeros((ninst,nvars,nnodes))
+            surface_node = np.zeros((nnodes,))
+            
+            for nf,iface in enumerate(lst_face):
+                nvert = self.face_conn['vert_per_face'][iface]
+                face_weight = self.face_conn['face_weight'][iface]
+                glo_nodes = self.face_conn['face_to_node'][iface,:nvert]
+                data_node[:,:,glo_nodes] += data_cell[:,:,nf][:,:,np.newaxis]*face_weight
+                surface_node[glo_nodes] += face_weight
+
+            # To avoid divide by 0 error
+            eps = self.face_conn['face_area'].min()/100.
+            surface_node[surface_node<eps] = eps
+            # Scale
+            data_node = data_node/surface_node[np.newaxis,np.newaxis,:]
+            
+            # Storage
+            if self.data is None:
+                self.data = dict()
+                
+            self.data[surface_name] = data_node[:,:,lst_node]
+
+                
+        else:
+            
+            # Store in fortran module
+            self.params_to_fapi()
+            
+            
+            # Prepare var extraction
+            retrieve_index = []
+            scale_type = []
+             
+            for ivar,var in enumerate(self.vars.keys()):
+                idx = self.vars[var]
+                if var == 'static_pressure':
+                    if idx>=0 :
+                        retrieve_index.append(idx)
+                        scale_type.append(int(Fsnc.pf_params.type_pressure))
+                    else:
+                        retrieve_index.append(self.vars['density'])
+                        scale_type.append(int(Fsnc.pf_params.type_pressure_from_density))
+                if var == 'density':
+                    if idx>=0 :
+                        retrieve_index.append(idx)
+                        scale_type.append(int(Fsnc.pf_params.type_density))
+                    else:
+                        retrieve_index.append(self.vars['static_pressure'])
+                        scale_type.append(int(Fsnc.pf_params.type_density_from_pressure))
+                if var in ['x_velocity','y_velocity','z_velocity']:
+                    retrieve_index.append(idx)
+                    scale_type.append(int(Fsnc.pf_params.type_velocity))
+                    
+            nvars = len(retrieve_index)
+            sel_nfaces = lst_face.shape[0]
+            sel_nnodes = lst_node.shape[0]
+            
+            data_sel_node = Fsnc.read_snc_frame(self.pfFile,frame,self.params['nnodes'],lst_face,lst_node,
+                                                self.face_conn['face_weight'],self.face_conn['face_to_node'],
+                                                self.face_conn['vert_per_face'],retrieve_index,scale_type,
+                                                sel_nfaces=sel_nfaces,sel_nnodes=sel_nnodes,
+                                                nvars=nvars,nfaces=self.params['nfaces'],
+                                                max_nv=self.params['max_vertex_per_face'])
+            
+            
+            # Storage
+            if self.data is None:
+                self.data = dict()
+                
+            self.data[surface_name] = data_sel_node.reshape((1,nvars,sel_nnodes))
+            
+        
         if self.verbose:
             stats = pd.DataFrame(data=self.data[surface_name].mean(axis=-1),columns=self.vars.keys())
             print('  -> Stats (nodes)')
             print(stats)
-        
+    
+    def params_to_fapi(self):
+        if self.fapi:
+            import pftools.fextend.snc_reader as Fsnc
+            
+        if self.params is None:
+            self.read_conversion_parameters()
+
+        if self.fapi:
+            Fsnc.pf_params.coeff_dx     = self.params['coeff_dx'] 
+            Fsnc.pf_params.timestep     = self.params['dt'] 
+            Fsnc.pf_params.coeff_vel    = self.params['coeff_vel']
+            Fsnc.pf_params.coeff_rho    = self.params['coeff_density']
+            Fsnc.pf_params.coeff_press  = self.params['coeff_press']
+            Fsnc.pf_params.offset_press = self.params['offset_pressure']
+            Fsnc.pf_params.weight_p2r   = self.params['weight_pressure_to_rho']
+            Fsnc.pf_params.weight_r2p   = self.params['weight_rho_to_pressure']
 
     def save_parameters(self,casename,dirout):
         """Method to export convertion parameters in a separated hdf5 file.
@@ -543,7 +620,7 @@ class sncConversion(PFConversion):
         if not fparams.get('connectivity',getclass=True) is None:
             if fparams.get('connectivity',getclass=True) == h5py.Group:
                 self.face_conn = dict()
-                grp = fparams['connectivity'.format(dom)]
+                grp = fparams['connectivity']
                 for par in grp.keys():
                     if par == 'glo_vertex_number':
                         self.face_conn['vert_per_face'] = grp['glo_vertex_number'][()]

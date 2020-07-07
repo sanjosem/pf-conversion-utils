@@ -57,7 +57,7 @@ class pncConversion(PFConversion):
         if self.format == 'volume-probe':
             self.weight = f.variables['fluid_volumes'][()] * self.params['coeff_dx']**3
         elif self.format == 'surface-probe':
-            self.weight = f1.variables['surfel_area'][()] * self.params['coeff_dx']**2
+            self.weight = f.variables['surfel_area'][()] * self.params['coeff_dx']**2
 
         # Average point
         intv = self.weight.sum()
