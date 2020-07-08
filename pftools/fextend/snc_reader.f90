@@ -763,7 +763,6 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
   enddo
 
   eps = minval(face_weight)*0.1
-  if (pf_read_debug) write(*,*) 'gather to node'
   if (pf_read_debug) write(*,*) 'eps=',eps
   iweight =  1.0d0 / max(node_weight,eps)
   do nf = 1,sel_nfaces

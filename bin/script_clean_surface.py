@@ -30,7 +30,7 @@ if 'output_directory' not in uinfo.keys():
     uinfo['output_directory'] = uinfo['directory']
 if 'face_names' not in uinfo.keys():
     uinfo['face_names'] = None
-    
+
 if not os.path.isdir(uinfo['directory']):
     sys.exit('Directory {0:s} cannot be found'.format(uinfo['directory']))
 if not os.path.isdir(uinfo['output_directory']):
@@ -47,7 +47,7 @@ if 'verbose' in uinfo.keys():
     sncConv = pfsnct.sncConversion(sncfile,uinfo['verbose'])
 else:
     sncConv = pfsnct.sncConversion(sncfile)
-    
+
 sncConv.read_conversion_parameters()
 
 sncConv.read_surface_names()
@@ -77,4 +77,9 @@ else:
 for surface_name in uinfo['face_names'].keys():
     sncConv.read_frame_data(surface_name,0)
 
-sncConv.save_vtk(uinfo['casename'],uinfo['output_directory'])
+if 'probes' in uinfo.keys():
+    for probe_name in uinfo['probes'].keys():
+        sncConv.extract_probe(probe_name,uinfo['probes'][probe_name])
+    sncConv.export_temporal_data(uinfo['casename'],uinfo['output_directory'],extension='txt')
+else:
+    sncConv.save_vtk(uinfo['casename'],uinfo['output_directory'])
