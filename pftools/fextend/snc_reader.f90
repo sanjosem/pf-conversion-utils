@@ -631,3 +631,193 @@ subroutine read_snc_frame(pfFile,frame_number,nnodes,face_selection,node_selecti
   deallocate(tmp_s)
 
 end subroutine read_snc_frame
+
+subroutine find_closest_node(pt_coords,node_coords,iclosest,dist_pt,nnodes)
+
+  implicit none
+
+  integer :: nnodes
+  real*8, dimension(3), intent(in) :: pt_coords
+  real*8, dimension(nnodes,3), intent(in) :: node_coords
+  integer, intent(out) :: iclosest
+  real*8, intent(out) :: dist_pt
+
+
+  integer :: inode, i
+  real*8 :: min_dist2, dist2
+
+  min_dist2 = 1.0d20
+
+  inode = 1
+  do i = 1,nnodes
+    dist2 = (pt_coords(1)-node_coords(i,1))**2                                 &
+          + (pt_coords(2)-node_coords(i,2))**2                                 &
+          + (pt_coords(3)-node_coords(i,3))**2
+    if (min_dist2>dist2) then
+      min_dist2 = dist2
+      inode = i
+    endif
+  enddo
+
+  dist_pt = sqrt(min_dist2)
+  iclosest = inode - 1  ! F to C index
+
+end subroutine find_closest_node
+
+subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
+                face_weight, read_indices,scale_types,                         &
+                data_sel_node,sel_nfaces,nvars)
+
+  use netcdf
+  use pf_params
+  implicit none
+
+  integer, intent(in) :: ntime
+  integer, intent(in) :: nfaces
+  integer, intent(in) :: sel_nfaces
+!f2py optional , depend(face_selection) :: sel_nfaces=len(face_selection)
+  integer, intent(in) :: nvars
+!f2py optional , depend(read_indices) :: nvars=len(read_indices)
+  integer*4, dimension(sel_nfaces), intent(in) :: face_selection
+  real*8, dimension(nfaces), intent(in) :: face_weight
+  integer, dimension(nvars), intent(in) :: read_indices
+  integer, dimension(nvars), intent(in) :: scale_types
+  character(len=256),intent(in) :: pfFile
+  real*8, dimension(nvars,ntime), intent(out) :: data_sel_node
+
+  ! Local variables
+
+  logical :: pf_read_debug
+
+  integer :: ncid,ncerr,measid
+  integer :: rank,k,idx,ivar
+  integer*4 :: nt,nf,glo_face
+  integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
+  integer, dimension(:), allocatable :: idims,start,count
+  real*8 :: eps, iweight,node_weight
+  character(len=256) :: dim_name
+  real*8, allocatable, dimension(:) :: tmp, tmp_s
+  real*8, allocatable, dimension(:,:) :: buffer
+  real*8, allocatable, dimension(:) :: sel_face_weight
+
+
+  pf_read_debug = .TRUE.
+
+  ncerr = nf90_open(pfFile, NF90_NOWRITE, ncid)
+  ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+  if (ncerr /= NF90_NOERR) stop
+
+  ncerr = nf90_inq_varid(ncid, "measurements", measid)
+  ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+  if (ncerr /= NF90_NOERR) stop
+
+  ncerr = nf90_inquire_variable(ncid, measid, ndims = rank)
+  ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+  if (ncerr /= NF90_NOERR) stop
+
+  if (rank/=3) then
+    write(*,*) "Expecting array of rank 3 for measurements"
+    stop
+  endif
+
+  ncerr = nf90_inquire_variable(ncid, measid, dimids = meas_dim_ids(1:rank))
+  ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+  if (ncerr /= NF90_NOERR) stop
+
+  allocate(idims(rank))
+
+  do k=1,rank
+    ncerr = nf90_inquire_dimension(ncid, meas_dim_ids(k), len = idims(k), name = dim_name)
+    ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+    if (ncerr /= NF90_NOERR) stop
+    if (pf_read_debug) write(*,'(A,1X,I3,1X,A,1X,A,1X,A,I9)') 'dimension',k,':',trim(dim_name),':',idims(k)
+  enddo
+
+  if (idims(1)/=nfaces) then
+    write(*,'(A,1X,I9)') "Expecting Number of faces:",nfaces
+    stop
+  endif
+
+  if (idims(3)/=ntime) then
+    write(*,'(A,1X,I9)') "Expecting Number of frames:",ntime
+    stop
+  endif
+
+
+  allocate(start(rank))
+  allocate(count(rank))
+
+  allocate(buffer(idims(2),ntime))
+
+  allocate(tmp(ntime))
+  allocate(tmp_s(ntime))
+
+  allocate(sel_face_weight(sel_nfaces))
+
+  ! Compute selected faces weighting including scatter
+  node_weight = 0.0d0
+  do nf = 1,sel_nfaces
+    glo_face = face_selection(nf) + 1 ! C to F numbering
+    sel_face_weight(nf) = face_weight(glo_face)
+    node_weight = node_weight + face_weight(glo_face)
+  enddo
+
+  eps = minval(face_weight)*0.1
+  if (pf_read_debug) write(*,*) 'gather to node'
+  if (pf_read_debug) write(*,*) 'eps=',eps
+  iweight =  1.0d0 / max(node_weight,eps)
+  do nf = 1,sel_nfaces
+    sel_face_weight(nf) = sel_face_weight(nf) * iweight
+  enddo
+
+  ! Loop over faces for which the node is a vertex
+  do nf = 1,sel_nfaces
+
+    glo_face = face_selection(nf) + 1 ! C to F numbering
+    start=(/glo_face,1,1/)
+    count=(/1,idims(2),ntime/)
+
+    ncerr = nf90_get_var(ncid, measid, buffer,start = start, count=count )
+    ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+    if (ncerr /= NF90_NOERR) stop
+
+    do ivar = 1,nvars
+
+      if (pf_read_debug) write(*,*) 'scaling ivar=',ivar
+      ! C to F index
+      idx = read_indices(ivar) + 1
+      if (pf_read_debug) write(*,*) 'corresponding idx=',idx
+
+      do nt = 1,ntime
+        tmp(nt) = buffer(idx,nt)
+      enddo
+
+      call scale_var(scale_types(ivar),tmp,tmp_s,ntime)
+      if (nf == 1) then
+        do nt=1,ntime
+          data_sel_node(ivar,nt) = tmp_s(nt)*sel_face_weight(nf)
+        enddo
+      else
+        do nt=1,ntime
+          data_sel_node(ivar,nt) = data_sel_node(ivar,nt) + tmp_s(nt)*sel_face_weight(nf)
+        enddo
+      endif
+
+    enddo
+
+  enddo
+
+  deallocate(start)
+  deallocate(idims)
+  deallocate(count)
+
+  ncerr = nf90_close(ncid)
+  ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+  if (ncerr /= NF90_NOERR) stop
+
+  deallocate(buffer)
+  deallocate(tmp)
+  deallocate(tmp_s)
+  deallocate(sel_face_weight)
+
+end subroutine read_time_sequence

@@ -21,7 +21,7 @@ class fncConversion(PFConversion):
         Convert data in SI and at mesh nodes
     save_vtk
         Create multiblock VTK format (UnstructuredGrid)
-        
+
 
     """
     def __init__(self,pfFile,verbose=True,use_fapi=None):
@@ -45,8 +45,8 @@ class fncConversion(PFConversion):
                 self.fapi = False
         else:
             self.fapi=use_fapi
-        
-        
+
+
         if self.verbose:
             print('PF file format is: {0:s}'.format(self.format))
 
@@ -56,22 +56,22 @@ class fncConversion(PFConversion):
         """
         import netCDF4 as netcdf
         import numpy as np
-        
+
         if self.params is None:
             self.read_conversion_parameters()
-            
-        
+
+
         self.domain = dict()
         if self.rotation:
-        
+
             f = netcdf.Dataset(self.pfFile,'r')
-            
+
             ref_frame_indices = f.variables['ref_frame_indices'] # -1 stationnary 0 LRF
             self.domain['rotor'] = np.where(ref_frame_indices[:] == 0)[0]
             self.domain['stator'] = np.where(ref_frame_indices[:] == -1)[0]
 
             f.close()
-            
+
 
     def read_volume_mesh(self,store=True):
         """Method to read and scale node coordinates. The array is stored in the class
@@ -82,76 +82,76 @@ class fncConversion(PFConversion):
             if True (default), coordinates are stored in the class
 
         """
-        
+
         import netCDF4 as netcdf
-        import numpy as np 
+        import numpy as np
         from copy import deepcopy
         if self.fapi:
             import pftools.fextend.fnc_reader as Ffnc
-        
+
         if self.domain is None:
             self.read_domains()
 
         f = netcdf.Dataset(self.pfFile, 'r')
-        
+
         self.params['ncells'] = f.dimensions['npoints'].size
         self.params['ndims'] = f.dimensions['ndims'].size
 
         if not self.fapi:
             element_coords = f.variables['coords'][()].astype('float')
             voxel_scales = f.variables['voxel_scales'][()]
-            
+
         f.close()
 
         assert self.params['ndims']==3, "Wrong coordinate dimensions"
-        
+
         # Compute cell connectivity
         if self.verbose:
             print("Compute center coordinates")
-            
+
         nb_vertex = 8
 
         if not self.rotation:
             self.domain['stator'] = np.arange(self.params['ncells'])
-        
+
         # Offset coordinates
         if not self.fapi:
             for idim in range(self.params['ndims']):
                 element_coords[:,idim]+=self.params['offset_coords'][idim]
-                
+
         self.cell_coords = dict()
         self.node_coords = dict()
         self.cell_conn = dict()
         self.vertex_to_node = dict()
         self.volume_cell = dict()
-        
+
         for dom in self.domain.keys():
             lst = self.domain[dom]
             nelm = lst.size
-            
+
             if self.verbose:
                 print("  -> {0:d} elements".format(nelm))
 
             if self.verbose:
                 print('Computing vertices coordinates for {0:s}'.format(dom))
-            
+
             if self.fapi:
                 cell_volumes,cell_coords,vertices_coords = Ffnc.read_fnc_mesh(self.pfFile,
                                             self.params['coeff_dx'],self.params['offset_coords'],
-                                            self.params['ncells'],lst)                
-                
+                                            self.params['ncells'],lst)
+
                 # scale coordinates
                 self.cell_coords[dom] = cell_coords
                 self.volume_cell[dom] = cell_volumes
-                
+
             else:
-                            
+
                 # scale coordinates
                 self.cell_coords[dom] = element_coords[lst,:] * self.params['coeff_dx']
-                    
+
                 dx = 2**(1.0 + voxel_scales[lst])
                 self.volume_cell[dom] = (self.params['coeff_dx']*dx)**3
-                
+
                 vertices_coords = np.zeros((nelm * 8, 3))
                 basis = np.eye(3)
                 vx = dx[:,np.newaxis]*basis[:,0][np.newaxis,:]
@@ -166,10 +166,10 @@ class fncConversion(PFConversion):
                 vertices_coords[5::8, :] = element_coords[lst,:] + vx      + vz
                 vertices_coords[6::8, :] = element_coords[lst,:] + vx + vy + vz
                 vertices_coords[7::8, :] = element_coords[lst,:]      + vy + vz
-            
+
             if self.verbose:
                 print("Compute connectivity")
-            
+
             coords_view = np.ascontiguousarray(vertices_coords.round(4)).view(
                             np.dtype((np.void, vertices_coords.dtype.itemsize * vertices_coords.shape[1])))
             _, idx, inv = np.unique(coords_view, return_index=True, return_inverse=True)
@@ -181,7 +181,7 @@ class fncConversion(PFConversion):
             nnodes = coords_unique.shape[0]
             if self.verbose:
                 print("  -> {0:d} nodes".format(nnodes))
-                
+
             self.node_coords[dom] = coords_unique
             self.cell_conn[dom] = new_connectivity
             self.vertex_to_node[dom] = deepcopy(idx)
@@ -191,40 +191,40 @@ class fncConversion(PFConversion):
                 for idim,coor in enumerate(['x','y','z']):
                     print('  {2:s}: [{0:.3e},{1:.3e}]'.format(
                             self.cell_coords[dom][:,idim].min(),self.cell_coords[dom][:,idim].max(),coor))
-                            
+
         return vertices_coords
-            
+
     def read_frame_data(self,frame):
-        
+
         import netCDF4 as netcdf
         import numpy as np
         import pandas as pd
         if self.fapi:
             import pftools.fextend.fnc_reader as Ffnc
-        
+
         if self.vars is None:
             self.define_measurement_variables()
-            
+
         if self.cell_conn is None:
             self.read_volume_mesh()
-            
+
         # before py2f wrapper
         if not type(frame) == int:
             raise RuntimeError('frame input must be an integer')
 
         if not self.fapi:
             slicing_instant = slice(frame,frame+1)
-            
+
             nvars = len(self.vars.keys())
-            
+
             f = netcdf.Dataset(self.pfFile, 'r')
 
             for dom in self.domain.keys():
-                
+
                 print('Converting data for domain \'{0:s}\''.format(dom))
-            
+
                 lst = self.domain[dom]
-            
+
                 # Get data (selected faces, selected variables)
                 tmp = f.variables['measurements'][slicing_instant,:,lst]
 
@@ -232,61 +232,61 @@ class fncConversion(PFConversion):
                 data_cell = np.zeros((tmp.shape[0],nvars,tmp.shape[-1]))
                 for ivar,var in enumerate(self.vars.keys()):
                     idx = self.vars[var]
-                    
+
                     if var == 'static_pressure':
                         if idx>=0 :
-                            data_cell[:,ivar,:] = ( ( tmp[:,idx,:] + self.params['offset_pressure'] ) 
+                            data_cell[:,ivar,:] = ( ( tmp[:,idx,:] + self.params['offset_pressure'] )
                                                   * self.params['coeff_press'] )
                         else:
                             idx = self.vars['density']
                             data_cell[:,ivar,:] = ( tmp[:,idx,:] * self.params['weight_rho_to_pressure']
                                              + self.params['offset_pressure'] ) * self.params['coeff_press']
-                                        
+
                     if var == 'density':
                         if idx>=0:
-                            data_cell[:,ivar,:] = tmp[:,idx,:] * self.params['coeff_density'] 
+                            data_cell[:,ivar,:] = tmp[:,idx,:] * self.params['coeff_density']
                         else:
                             idx = self.vars['static_pressure']
                             data_cell[:,ivar,:]  =  ( tmp[:,idx,:] * self.params['weight_pressure_to_rho']
                                                * self.params['coeff_density'] )
                     if var in ['x_velocity','y_velocity','z_velocity']:
-                        data_cell[:,ivar,:] =  tmp[:,idx,:] * self.params['coeff_vel'] 
-                    
+                        data_cell[:,ivar,:] =  tmp[:,idx,:] * self.params['coeff_vel']
+
                 if self.verbose:
                     stats = pd.DataFrame(data=data_cell.mean(axis=-1),columns=self.vars.keys())
                     print('  -> Stats (cell)')
                     print(stats)
 
                 ninst,nvars,ncells = data_cell.shape
-                
+
                 # Cell to node
                 new_connectivity = self.cell_conn[dom]
                 nnodes = self.node_coords[dom].shape[0]
-                
+
                 data_node = np.zeros((ninst,nvars,nnodes))
-                
+
                 scale_nvert = 1./8.
                 cell_weight = self.volume_cell[dom]*scale_nvert
-                
+
                 volume_node = np.zeros((nnodes,))
-                
+
                 for node_idx in range(8):
                     if self.verbose:
                         print('  -> vertex {0:d}/8'.format(node_idx+1))
-                    
+
                     data_node[:,:,new_connectivity[:,node_idx]] += data_cell*cell_weight
                     volume_node[new_connectivity[:, node_idx]] += cell_weight
-                        
+
                 # To avoid divide by 0 error
                 eps = self.volume_cell[dom].min()/100.
                 volume_node[volume_node<eps] = eps
                 # Scale
                 data_node = data_node/volume_node[np.newaxis,np.newaxis,:]
-                
+
                 # Storage
                 if self.data is None:
                     self.data = dict()
-                    
+
                 self.data[dom] = data_node
 
                 if self.verbose:
@@ -295,17 +295,17 @@ class fncConversion(PFConversion):
                     stats = pd.DataFrame(data=self.data[dom].mean(axis=-1),columns=self.vars.keys())
                     print('  -> Stats (nodes)')
                     print(stats)
-            
-            
+
+
             f.close()
         else:
             # Store in fortran module
             self.params_to_fapi()
-            
+
             # Prepare var extraction
             retrieve_index = []
             scale_type = []
-             
+
             for ivar,var in enumerate(self.vars.keys()):
                 idx = self.vars[var]
                 if var == 'static_pressure':
@@ -325,9 +325,9 @@ class fncConversion(PFConversion):
                 if var in ['x_velocity','y_velocity','z_velocity']:
                     retrieve_index.append(idx)
                     scale_type.append(int(Ffnc.pf_params.type_velocity))
-                    
+
             for dom in self.domain.keys():
-                
+
                 print('Converting data for domain \'{0:s}\''.format(dom))
                 nnodes =self.node_coords[dom].shape[0]
                 data_node = Ffnc.read_fnc_frame(self.pfFile,frame,
@@ -338,26 +338,26 @@ class fncConversion(PFConversion):
                 # Storage
                 if self.data is None:
                     self.data = dict()
-                    
+
                 nvars = len(retrieve_index)
                 self.data[dom] = data_node.reshape(1,nvars,nnodes)
-                
+
                 if self.verbose:
                     stats = pd.DataFrame(data=self.data[dom].mean(axis=-1),columns=self.vars.keys())
                     print('  -> Stats (nodes)')
                     print(stats)
-            
-            
+
+
     def params_to_fapi(self):
         if self.fapi:
             import pftools.fextend.fnc_reader as Ffnc
-            
+
         if self.params is None:
             self.read_conversion_parameters()
-        
+
         if self.fapi:
-            Ffnc.pf_params.coeff_dx     = self.params['coeff_dx'] 
-            Ffnc.pf_params.timestep     = self.params['dt'] 
+            Ffnc.pf_params.coeff_dx     = self.params['coeff_dx']
+            Ffnc.pf_params.timestep     = self.params['dt']
             Ffnc.pf_params.coeff_vel    = self.params['coeff_vel']
             Ffnc.pf_params.coeff_rho    = self.params['coeff_density']
             Ffnc.pf_params.coeff_press  = self.params['coeff_press']
@@ -377,10 +377,10 @@ class fncConversion(PFConversion):
 
         """
         import h5py
-        
+
         outFile = super().save_parameters(casename,dirout)
         print("Adding volume mesh convertion arrays into:\n  ->  {0:s}".format(outFile))
-        
+
         fparams = h5py.File(outFile,'a')
         if self.domain is not None and self.vertex_to_node is not None:
             gdom = fparams.create_group("domains")
@@ -392,9 +392,9 @@ class fncConversion(PFConversion):
                 gcur.create_dataset('node_coords', data=self.node_coords[dom])
                 gcur.create_dataset('connectivity', data=self.cell_conn[dom])
                 gcur.create_dataset('vertex_to_node', data=self.vertex_to_node[dom])
-                
+
                 fparams.flush()
-            
+
         fparams.close()
         return outFile
 
@@ -402,19 +402,19 @@ class fncConversion(PFConversion):
     def load_parameters(self,h5file):
 
         import h5py
-        
+
         pfFile = self.pfFile
         verbosity = self.verbose
         fapi = self.fapi
-         
+
         self.__init__(pfFile,verbose=verbosity,use_fapi=fapi)
-        
+
         super().load_parameters(h5file)
-        
+
         fparams = h5py.File(h5file,'r')
-            
+
         print("Loading the fnc connectivity and geometry file:\n  ->  {0:s}".format(h5file))
-                    
+
         if fparams.get('domains',getclass=True) is None:
             RuntimeError('No domains group file, {0:s} is is not valid for fnc'.format(self.format))
 
@@ -429,7 +429,7 @@ class fncConversion(PFConversion):
                 for dom in ['stator','rotor']:
                     if not fparams.get('domains/{0:s}'.format(dom),getclass=True) is None:
                         if fparams.get('domains/{0:s}'.format(dom),getclass=True) == h5py.Group:
-                        
+
                             grp = fparams['domains/{0:s}'.format(dom)]
                             self.domain[dom] = grp['glo_cell_indices'][()]
                             self.cell_coords[dom] = grp['cell_coords'][()]
@@ -437,8 +437,8 @@ class fncConversion(PFConversion):
                             self.node_coords[dom] = grp['node_coords'][()]
                             self.cell_conn[dom] = grp['connectivity'][()]
                             self.vertex_to_node[dom] = grp['vertex_to_node'][()]
-                                            
-                        
+
+
         fparams.close()
 
     def create_vtk(self):
@@ -448,10 +448,10 @@ class fncConversion(PFConversion):
         ----------
         """
         from pftools.module_vtk_utils import cells_to_vtkUnstruct,data_to_vtkBlock
-        
+
         if self.domain is None:
             self.read_domains()
-            
+
         if self.cell_conn is None:
             self.read_volume_mesh()
 
@@ -461,13 +461,13 @@ class fncConversion(PFConversion):
             cell_elm = self.cell_conn[dom]
 
             list_unStruct_Blocks[dom] = cells_to_vtkUnstruct(loc_nodes,cell_elm)
-            
+
             if self.data is not None:
                 list_unStruct_Blocks[dom] = data_to_vtkBlock(
                     list_unStruct_Blocks[dom],self.data[dom][0,:,:],self.vars.keys())
 
         self.vtk_object = list_unStruct_Blocks
-        
+
     def save_vtk(self,casename,dirout):
         """Method to export volume mesh for paraview
 
@@ -489,20 +489,20 @@ class fncConversion(PFConversion):
         print("Exporting in VTK format:\n  ->  {0:s}".format(outFile))
 
         save_MultiBlock(self.vtk_object,outFile)
-        
+
 
     def extract_probe(self,probe_name,probe_coords):
-        
+
         if self.fapi:
             import pftools.fextend.fnc_reader as Ffnc
-            
+
         import numpy as np
         from pandas import DataFrame
         import netCDF4 as netcdf
-        
+
         if self.time is None:
             self.extract_time_info()
-            
+
         if self.vars is None:
             self.define_measurement_variables()
 
@@ -511,30 +511,33 @@ class fncConversion(PFConversion):
             if self.fapi:
                 icell_closest,dist = Ffnc.find_closest_cell(probe_coords,self.cell_coords[dom])
             else:
-                dom_dist = np.linalg.norm(np.asarray(probe_coords)[np.newaxis,:] 
+                dom_dist = np.linalg.norm(np.asarray(probe_coords)[np.newaxis,:]
                                             - self.cell_coords[dom])
                 icell_closest = dom_dist.argmin()
                 dist = dom_dist[icell_closest]
-                
+
             if dist<dloc:
                 dloc = dist
                 pid = icell_closest
                 domn = dom
-                    
+
         print('Probe {0:s} found in {1:s} at distance {2:e} m'.format(
                 probe_name,domn,dloc))
-            
+
         glo_id = self.domain[domn][pid]
-        
+
         data = dict()
         data['time'] = self.time['time_center']
-        
+
         if self.fapi:
-            
+
+            # Store in fortran module
+            self.params_to_fapi()
+
             # Prepare var extraction
             retrieve_index = []
             scale_type = []
-             
+
             for ivar,var in enumerate(self.vars.keys()):
                 idx = self.vars[var]
                 if var == 'static_pressure':
@@ -554,49 +557,47 @@ class fncConversion(PFConversion):
                 if var in ['x_velocity','y_velocity','z_velocity']:
                     retrieve_index.append(idx)
                     scale_type.append(int(Ffnc.pf_params.type_velocity))
-            
+
             temporal_data = Ffnc.get_cell_data(glo_id,self.time['nsets'],self.pfFile,retrieve_index,scale_type)
-            
+
             for ivar,var in enumerate(self.vars.keys()):
                 data[var] = temporal_data[:,ivar]
-            
+
         else:
             f = netcdf.Dataset(self.pfFile, 'r')
-            tmp = f.variables['measurements'][:,:,glo_id] 
+            tmp = f.variables['measurements'][:,:,glo_id]
             f.close()
-            
+
             nvars = len(self.vars.keys())
-            
+
             # Conversion in SI
             data_cell = np.zeros((tmp.shape[0],nvars))
             for ivar,var in enumerate(self.vars.keys()):
                 idx = self.vars[var]
-                
+
                 if var == 'static_pressure':
                     if idx>=0 :
-                        data_cell[:,ivar] = ( ( tmp[:,idx] + self.params['offset_pressure'] ) 
+                        data_cell[:,ivar] = ( ( tmp[:,idx] + self.params['offset_pressure'] )
                                               * self.params['coeff_press'] )
                     else:
                         idx = self.vars['density']
                         data_cell[:,ivar] = ( tmp[:,idx] * self.params['weight_rho_to_pressure']
                                          + self.params['offset_pressure'] ) * self.params['coeff_press']
-                                         
+
                 if var == 'density':
                     if idx>=0:
-                        data_cell[:,ivar] = tmp[:,idx] * self.params['coeff_density'] 
+                        data_cell[:,ivar] = tmp[:,idx] * self.params['coeff_density']
                     else:
                         idx = self.vars['static_pressure']
                         data_cell[:,ivar]  =  ( tmp[:,idx] * self.params['weight_pressure_to_rho']
                                            * self.params['coeff_density'] )
                 if var in ['x_velocity','y_velocity','z_velocity']:
-                    data_cell[:,ivar] =  tmp[:,idx] * self.params['coeff_vel'] 
-            
+                    data_cell[:,ivar] =  tmp[:,idx] * self.params['coeff_vel']
+
             for ivar,var in enumerate(self.vars.keys()):
                 data[var] = data_cell[:,ivar]
-                
+
         if self.probe is None:
             self.probe = dict()
-        
+
         self.probe[probe_name] = DataFrame(data=data)
-            
-    
