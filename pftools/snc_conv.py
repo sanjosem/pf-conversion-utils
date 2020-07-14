@@ -698,6 +698,7 @@ class sncConversion(PFConversion):
         from pftools.module_vtk_utils import find_closest_point
         import numpy as np
         from pandas import DataFrame
+        import time
         import netCDF4 as netcdf
         if self.fapi:
             import pftools.fextend.snc_reader as Fsnc
@@ -772,9 +773,12 @@ class sncConversion(PFConversion):
             nvars = len(retrieve_index)
             sel_nfaces = lst_face.shape[0]
 
+            tic = time.perf_counter()
             data_node = Fsnc.read_time_sequence(self.pfFile,self.time['nsets'],lst_face,
                                            self.face_conn['face_weight'],retrieve_index,scale_type,
                                            self.params['nfaces'],sel_nfaces,nvars)
+            toc = time.perf_counter()
+            print('  --> Extraction time: {0:.2f} s'.format(toc-tic))
 
             for ivar,var in enumerate(self.vars.keys()):
                 data[var] = data_node[ivar,:]
