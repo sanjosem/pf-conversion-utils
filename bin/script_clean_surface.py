@@ -67,15 +67,7 @@ else:
 sncConv.read_coordinates()
 sncConv.read_connectivity()
 
-if 'surface_min' in uinfo.keys():
-    for surface_name in uinfo['face_names'].keys():
-        sncConv.triangulate_surface(surface_name,uinfo['face_names'][surface_name],
-            uinfo['surface_min'])
-else:
-    for surface_name in uinfo['face_names'].keys():
-        sncConv.triangulate_surface(surface_name,uinfo['face_names'][surface_name])
-
-
+# Probes
 if 'probes' in uinfo.keys():
     for probe_name in uinfo['probes'].keys():
         sncConv.extract_probe(probe_name,uinfo['probes'][probe_name])
@@ -88,7 +80,18 @@ elif 'probes_file'  in uinfo.keys():
             print('extracting probe {0:s}'.format(probe_name))
             sncConv.extract_probe(probe_name,(ldf[pbcol].loc[ip,'x'],ldf[pbcol].loc[ip,'y'],ldf[pbcol].loc[ip,'z']))
     sncConv.export_temporal_data(uinfo['casename'],uinfo['output_directory'],delimiter=',')
+
 else:
+
+    if 'surface_min' in uinfo.keys():
+        for surface_name in uinfo['face_names'].keys():
+            sncConv.triangulate_surface(surface_name,uinfo['face_names'][surface_name],
+                uinfo['surface_min'])
+    else:
+        for surface_name in uinfo['face_names'].keys():
+            sncConv.triangulate_surface(surface_name,uinfo['face_names'][surface_name])
+
+
     for surface_name in uinfo['face_names'].keys():
         sncConv.read_frame_data(surface_name,0)
     sncConv.save_vtk(uinfo['casename'],uinfo['output_directory'])

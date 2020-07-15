@@ -71,4 +71,135 @@ contains
 
   end subroutine scale_var
 
+  subroutine read_time(pfFile,dt,ntime,avg_period,sampling_period,time_center)
+    use netcdf
+
+    implicit none
+
+    integer, intent(in) :: ntime
+    real*8, intent(in) :: dt
+    character(len=256),intent(in) :: pfFile
+    real*8, intent(out) :: avg_period,sampling_period
+    real*8, dimension(ntime), intent(out) :: time_center
+
+    ! Local variables
+    integer :: ncid,ncerr,measid
+    integer :: rank,k,nt
+    integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
+    integer, dimension(:), allocatable :: idims,start,count
+    character(len=256) :: dim_name
+    real*8 :: minv,maxv, check
+    real*8, dimension(:), pointer :: buffer, work
+    real*8, dimension(:), allocatable :: tstart, tend
+
+    ! store in module
+    timestep = dt
+
+    if (pf_read_debug) write(*,'(A,1X,A,1X,A)') 'Opening file',TRIM(pfFile),'for reading'
+
+    ncerr = nf90_open(pfFile, NF90_NOWRITE, ncid)
+    ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+    if (ncerr /= NF90_NOERR) stop
+
+    ncerr = nf90_inq_varid(ncid, "start_time", measid)
+    ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+    if (ncerr /= NF90_NOERR) stop
+
+    rank = 1
+
+    ncerr = nf90_inquire_variable(ncid, measid, dimids = meas_dim_ids(1:rank))
+    ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+    if (ncerr /= NF90_NOERR) stop
+
+    allocate(idims(rank))
+
+    do k=1,rank
+      ncerr = nf90_inquire_dimension(ncid, meas_dim_ids(k), len = idims(k), name = dim_name)
+      ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+      if (ncerr /= NF90_NOERR) stop
+      if (pf_read_debug) write(*,'(A,1X,I3,1X,A,1X,A,1X,A,I9)') 'dimension',k,':',trim(dim_name),':',idims(k)
+    enddo
+
+    if ( idims(1)/=ntime ) then
+      write(*,'(A)') 'Wrong dimensions! stoping'
+      write(*,*) 'idims(1)=',idims(1),ntime
+      stop
+    endif
+
+    allocate(buffer(ntime))
+    allocate(tstart(ntime))
+    allocate(tend(ntime))
+
+    ncerr = nf90_get_var(ncid, measid, buffer)
+    ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+    if (ncerr /= NF90_NOERR) stop
+
+    call scale_var(type_time,buffer,tstart,ntime)
+
+    ncerr = nf90_inq_varid(ncid, "end_time", measid)
+    if (ncerr /= NF90_NOERR) stop
+
+    ncerr = nf90_get_var(ncid, measid, buffer)
+    if (ncerr /= NF90_NOERR) stop
+
+    call scale_var(type_time,buffer,tend,ntime)
+
+    do nt=1,ntime
+      time_center(nt) = 0.5*(tend(nt) + tstart(nt))
+    enddo
+
+    write(*,'(A,I6,A,E16.6,1X,A)') '  -> First frame (',0,'): ',time_center(1),' s'
+    if (ntime>1) then
+      write(*,'(A,I6,A,E16.6,1X,A)') '  -> Last frame (',ntime,'): ',time_center(ntime),' s'
+    endif
+
+    deallocate(idims)
+
+    ncerr = nf90_close(ncid)
+    ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+    if (ncerr /= NF90_NOERR) stop
+
+
+    do nt=1,ntime
+      buffer(nt) = (tend(nt) - tstart(nt))
+    enddo
+
+    minv = minval(buffer)
+    maxv = maxval(buffer)
+    check = abs(maxv-minv)/dt
+    if (check>8) then
+      write(*,'(A)') '  ! Averaging period is not constant'
+      write(*,'(A,E16.6,1X,E16.6)') '  ! Min/max period [s]: ',minv,maxv
+      avg_period = 0.0d0
+    else
+      avg_period = sum(buffer)/real(ntime,8)
+    endif
+
+    if (ntime>1) then
+
+      do nt=1,ntime-1
+        buffer(nt) = time_center(nt+1) - time_center(nt)
+      enddo
+
+      work => buffer(1:(ntime-1))
+
+      minv = minval(work)
+      maxv = maxval(work)
+      check = abs(maxv-minv)/dt
+      if (check>4) then
+        write(*,'(A)') '  ! Sampling period is not constant'
+        write(*,'(A,E16.6,1X,E16.6)') '  ! Min/max sampling [s]: ',minv,maxv
+        sampling_period = 0.0d0
+      else
+        sampling_period = sum(work)/real(ntime-1,8)
+      endif
+
+    else
+      sampling_period = 0.0d0
+    endif
+
+    deallocate(buffer)
+
+  end subroutine read_time
+
 end module pf_params
