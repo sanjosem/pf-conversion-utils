@@ -649,6 +649,7 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
 
   use netcdf
   use pf_params
+
   implicit none
 
   integer, intent(in) :: ntime
@@ -670,11 +671,11 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
   integer*4 :: nt,nf,glo_face, nread
   integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
   integer, dimension(:), allocatable :: idims,start,count
-  real*8 :: eps, iweight,node_weight
+  real*8 :: eps, iweight,node_weight, Time1,Time2,Time3
   character(len=256) :: dim_name
   real*8, dimension(:), pointer :: tmp, tmp_s
-  real*8, dimension(:,:), pointer :: read_buffer
-  real*8, dimension(:,:,:), pointer :: buffer
+  real*8, dimension(:,:,:), pointer :: read_buffer,buffer
+  real*8, allocatable, dimension(:,:,:), target :: storage
   real*8, allocatable, dimension(:) :: sel_face_weight
   integer :: ncurr
   integer, parameter :: npart = 1000
@@ -723,7 +724,8 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
   allocate(start(rank))
   allocate(count(rank))
 
-  allocate(buffer(sel_nfaces,idims(2),ntime))
+  allocate(buffer(idims(1),idims(2),npart))
+  allocate(storage(sel_nfaces,idims(2),ntime))
   allocate(tmp_s(ntime))
 
   allocate(sel_face_weight(sel_nfaces))
@@ -749,21 +751,30 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
     nread = min(ncurr+npart,ntime) - ncurr
     write(*,'(A,1X,I8,A,I8)') '  Reading part:',ncurr,' --> ',ncurr+nread
 
-    ! Loop over faces for which the node is a vertex
-    do nf = 1,sel_nfaces
+    call cpu_time(Time1)
+    read_buffer => buffer(:,:,1:nread)
 
-      read_buffer => buffer(nf,:,(ncurr+1):(ncurr+nread))
+    start=(/1,1,ncurr+1/)
+    count=(/idims(1),idims(2),nread/)
 
-      glo_face = face_selection(nf) + 1 ! C to F numbering
+    ncerr = nf90_get_var(ncid, measid, read_buffer,start = start, count=count )
+    ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+    if (ncerr /= NF90_NOERR) stop
+    call cpu_time(Time2)
 
-      start=(/glo_face,1,ncurr+1/)
-      count=(/1,idims(2),nread/)
+    do nt=1,nread
+      do ivar = 1,idims(2)
+        ! Loop over faces for which the node is a vertex
+        do nf = 1,sel_nfaces
+          glo_face = face_selection(nf) + 1 ! C to F numbering
+          storage(nf,ivar,ncurr+nt) = read_buffer(glo_face,ivar,nt)
+        enddo ! Loop selected faces
+      enddo
+    enddo
+    call cpu_time(Time3)
 
-      ncerr = nf90_get_var(ncid, measid, read_buffer,start = start, count=count )
-      ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
-      if (ncerr /= NF90_NOERR) stop
-
-    enddo ! Loop selected faces
+    write(*,'(A,1X,E16.8,1X,A)') '     --> Time to read part:',Time2-Time1,'s'
+    write(*,'(A,1X,E16.8,1X,A)') '     --> Time to store part:',Time3-Time2,'s'
 
     ncurr = ncurr + nread
     if (ncurr >= ntime) exit
@@ -779,7 +790,7 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
 
     do nf = 1,sel_nfaces
 
-      tmp => buffer(nf,idx,:)
+      tmp => storage(nf,idx,:)
 
       call scale_var(scale_types(ivar),tmp,tmp_s,ntime)
 
@@ -809,6 +820,7 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
   nullify(read_buffer)
   nullify(tmp)
   deallocate(buffer)
+  deallocate(storage)
   deallocate(tmp_s)
   deallocate(sel_face_weight)
 

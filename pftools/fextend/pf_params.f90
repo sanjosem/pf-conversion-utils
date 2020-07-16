@@ -86,7 +86,7 @@ contains
     integer :: ncid,ncerr,measid
     integer :: rank,k,nt
     integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
-    integer, dimension(:), allocatable :: idims,start,count
+    integer, dimension(:), allocatable :: idims
     character(len=256) :: dim_name
     real*8 :: minv,maxv, check
     real*8, dimension(:), pointer :: buffer, work
