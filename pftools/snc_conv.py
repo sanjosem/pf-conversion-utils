@@ -48,6 +48,11 @@ class sncConversion(PFConversion):
         else:
             self.fapi=use_fapi
 
+        if self.fapi:
+            print('Using the Fortran interface')
+        else:
+            print('Not using the Fortran interface')
+
 
     def read_surface_names(self):
         """Method to read the surface patchs (called faces) contained in the powerflow file
@@ -714,7 +719,7 @@ class sncConversion(PFConversion):
             print('Probe {0:s} found at distance {1:e} m'.format(
                     probe_name,dist))
         else:
-
+            print('Extraction without fortran API')
             if self.vtk_object is None:
                 self.create_vtk()
 
