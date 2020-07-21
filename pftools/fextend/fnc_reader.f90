@@ -12,14 +12,14 @@ subroutine read_fnc_mesh(pfFile,coeff_dx,offset,ncells,selection, &
   integer*4, dimension(sel_ncells), intent(in) :: selection
   character(len=256),intent(in) :: pfFile
   real*8, dimension(ncells), intent(out) :: cell_volumes
-  !f2py optional , depend(selection) :: sel_ncells=len(selection)
+  !f2py depend(selection) :: sel_ncells=len(selection)
   real*8, dimension(ncells,3), intent(out) :: cell_coords
   real*8, dimension(ncells*8,3), intent(out) :: vertices_coords
 
   ! Local variables
   integer :: ncid,ncerr,measid
   integer :: rank,k,nc,idx,idim
-  integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
+  integer, dimension(5) :: meas_dim_ids
   integer, dimension(:), allocatable :: idims,start,count
   character(len=256) :: dim_name
   real*8 :: dx
@@ -218,7 +218,7 @@ subroutine read_fnc_frame(pfFile,frame_number,ncells,nnodes,selection,cell_volum
   integer :: ncid,ncerr,measid
   integer :: rank,k,idx,iv,ivar
   integer*4 :: no, glo_cell,nc
-  integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
+  integer, dimension(5) :: meas_dim_ids
   integer, dimension(:), allocatable :: idims,start,count
   real*8 :: eps, scale_nv, cell_weight, ivol,min_val,max_val,mean_val,mean2_val,std_val
   character(len=256) :: dim_name
@@ -417,7 +417,7 @@ subroutine get_cell_data(icell,nframes,pfFile,read_indices,scale_types,temporal_
   ! Local variables
   integer :: ncid,ncerr,measid
   integer :: rank,k,idx,ivar,nt
-  integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
+  integer, dimension(5) :: meas_dim_ids
   integer, dimension(:), allocatable :: idims,start,count
   character(len=256) :: dim_name
   real*8, allocatable, dimension(:) :: tmp, tmp_s
