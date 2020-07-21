@@ -74,7 +74,13 @@ if 'probes' in uinfo.keys():
     sncConv.export_temporal_data(uinfo['casename'],uinfo['output_directory'],extension='txt')
 elif 'probes_file'  in uinfo.keys():
     ldf = pd.read_excel(uinfo['probes_file'],sheet_name=None)
-    for pbcol in ldf.keys():
+    if 'probes_file_sheet' in uinfo.keys():
+        work_list = (uinfo['probes_file_sheet'],)
+    else:
+        work_list = ldf.keys()
+    print(work_list)
+    print(ldf.keys())
+    for pbcol in work_list:
         for ip in range(ldf[pbcol].shape[0]):
             probe_name = '{0:s}-{1:s}'.format(pbcol,ldf[pbcol].loc[ip,'probe_name'])
             print('extracting probe {0:s}'.format(probe_name))
