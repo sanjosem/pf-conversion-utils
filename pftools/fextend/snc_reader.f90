@@ -14,7 +14,7 @@ subroutine read_snc_coordinates(pfFile,coeff_dx,offset,nnodes,coords)
   ! Local variables
   integer :: ncid,ncerr,measid
   integer :: rank,k,nf
-  integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
+  integer, dimension(5) :: meas_dim_ids
   integer, dimension(:), allocatable :: idims,start,count
   character(len=256) :: dim_name
   real*8, dimension(3) :: minv,maxv
@@ -105,7 +105,7 @@ subroutine compute_vertex_nb(pfFile,nfaces,nvertices,min_nv,max_nv,vert_per_face
   ! Local variables
   integer :: ncid,ncerr,measid
   integer :: rank,k,nf
-  integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
+  integer, dimension(5) :: meas_dim_ids
   integer, dimension(:), allocatable :: idims
   character(len=256) :: dim_name
   integer, allocatable, dimension(:) :: buffer
@@ -179,7 +179,7 @@ subroutine create_initial_connectivity(pfFile,vert_per_face,max_nv,nfaces,face_t
 
   integer, intent(in) :: max_nv
   integer, intent(in) :: nfaces
-!f2py optional , depend(vert_per_face) :: nfaces=len(vert_per_face)
+!f2py depend(vert_per_face) :: nfaces=len(vert_per_face)
   character(len=256),intent(in) :: pfFile
   integer, dimension(nfaces), intent(in) :: vert_per_face
   integer, dimension(nfaces,max_nv), intent(out) :: face_to_node
@@ -187,7 +187,7 @@ subroutine create_initial_connectivity(pfFile,vert_per_face,max_nv,nfaces,face_t
   ! Local variables
   integer :: ncid,ncerr,measid
   integer :: rank,k,nf,nv,nvert, idv
-  integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
+  integer, dimension(5) :: meas_dim_ids
   integer, dimension(:), allocatable :: idims
   character(len=256) :: dim_name
   integer, allocatable, dimension(:) :: vertex_to_node, first_vertex
@@ -273,7 +273,7 @@ subroutine compute_face_node_weight(pfFile,coeff_dx,vert_per_face,face_to_node,n
   integer :: ncid,ncerr,measid
   integer :: rank,k,nf,nv,glo,no
   real*8 :: scale_nv, scale_area
-  integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
+  integer, dimension(5) :: meas_dim_ids
   integer, dimension(:), allocatable :: idims
   character(len=256) :: dim_name
 
@@ -354,7 +354,7 @@ subroutine read_face_norm(pfFile,nfaces,face_norm)
   ! Local variables
   integer :: ncid,ncerr,measid
   integer :: rank,k,nf
-  integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
+  integer, dimension(5) :: meas_dim_ids
   integer, dimension(:), allocatable :: idims,start,count
   character(len=256) :: dim_name
   real*8, allocatable, dimension(:) :: buffer
@@ -431,15 +431,15 @@ subroutine read_snc_frame(pfFile,frame_number,nnodes,face_selection,node_selecti
   integer, intent(in) :: frame_number
   integer, intent(in) :: nnodes
   integer, intent(in) :: nfaces
-!f2py optional , depend(vert_per_face) :: nfaces=len(vert_per_face)
+!f2py depend(vert_per_face) :: nfaces=len(vert_per_face)
   integer, intent(in) :: max_nv
-!f2py optional , depend(face_to_node) :: max_nv=size(face_to_node,dim=2)
+!f2py depend(face_to_node) :: max_nv=size(face_to_node,dim=2)
   integer, intent(in) :: sel_nfaces
-!f2py optional , depend(face_selection) :: sel_nfaces=len(face_selection)
+!f2py depend(face_selection) :: sel_nfaces=len(face_selection)
   integer, intent(in) :: sel_nnodes
-!f2py optional , depend(node_selection) :: sel_nnodes=len(node_selection)
+!f2py depend(node_selection) :: sel_nnodes=len(node_selection)
   integer, intent(in) :: nvars
-!f2py optional , depend(read_indices) :: nvars=len(read_indices)
+!f2py depend(read_indices) :: nvars=len(read_indices)
   integer*4, dimension(sel_nfaces), intent(in) :: face_selection
   integer*4, dimension(sel_nnodes), intent(in) :: node_selection
   integer*4, dimension(nfaces,max_nv), intent(in) :: face_to_node
@@ -454,7 +454,7 @@ subroutine read_snc_frame(pfFile,frame_number,nnodes,face_selection,node_selecti
   integer :: ncid,ncerr,measid
   integer :: rank,k,idx,iv,ivar,nvert
   integer*4 :: no, glo_no,nf,glo_face
-  integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
+  integer, dimension(5) :: meas_dim_ids
   integer, dimension(:), allocatable :: idims,start,count
   real*8 :: eps, iweight,min_val,max_val,mean_val,mean2_val,std_val
   character(len=256) :: dim_name
@@ -655,9 +655,9 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
   integer, intent(in) :: ntime
   integer, intent(in) :: nfaces
   integer, intent(in) :: sel_nfaces
-!f2py optional , depend(face_selection) :: sel_nfaces=len(face_selection)
+!f2py depend(face_selection) :: sel_nfaces=len(face_selection)
   integer, intent(in) :: nvars
-!f2py optional , depend(read_indices) :: nvars=len(read_indices)
+!f2py depend(read_indices) :: nvars=len(read_indices)
   integer*4, dimension(sel_nfaces), intent(in) :: face_selection
   real*8, dimension(nfaces), intent(in) :: face_weight
   integer, dimension(nvars), intent(in) :: read_indices
@@ -669,7 +669,7 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
   integer :: ncid,ncerr,measid
   integer :: rank,k,idx,ivar
   integer*4 :: nt,nf,glo_face, nread
-  integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
+  integer, dimension(5) :: meas_dim_ids
   integer, dimension(:), allocatable :: idims,start,count
   real*8 :: eps, iweight,node_weight, Time1,Time2,Time3
   character(len=256) :: dim_name
@@ -678,7 +678,7 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
   real*8, allocatable, dimension(:,:,:), target :: storage
   real*8, allocatable, dimension(:) :: sel_face_weight
   integer :: ncurr
-  integer, parameter :: npart = 1000
+  integer, parameter :: npart = 10
 
   ncerr = nf90_open(pfFile, NF90_NOWRITE, ncid)
   ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)

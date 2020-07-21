@@ -27,7 +27,7 @@ contains
   subroutine scale_var(scale_type,var_lat,var_SI,n)
 
     integer, intent(in) :: n
-    !f2py optional , depend(var_lat) :: n=len(var_lat)
+    !f2py depend(var_lat) :: n=len(var_lat)
     integer, intent(in) :: scale_type
     real*8, dimension(n), intent(in) :: var_lat
     real*8, dimension(n), intent(out) :: var_SI
@@ -85,7 +85,7 @@ contains
     ! Local variables
     integer :: ncid,ncerr,measid
     integer :: rank,k,nt
-    integer, dimension(NF90_MAX_VAR_DIMS) :: meas_dim_ids
+    integer, dimension(5) :: meas_dim_ids
     integer, dimension(:), allocatable :: idims
     character(len=256) :: dim_name
     real*8 :: minv,maxv, check
