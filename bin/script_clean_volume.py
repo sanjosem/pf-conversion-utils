@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python
 from importlib import reload  # If on Python 3
 
 import yaml
