@@ -41,10 +41,15 @@ if not os.path.exists(fncfile):
 if 'casename' not in uinfo.keys():
     uinfo['casename'] = uinfo['fnc_filename'].replace('.fnc','')
 
-if 'verbose' in uinfo.keys():
-    fncConv = pft.fncConversion(fncfile,uinfo['verbose'])
+if 'fapi' in uinfo.keys():
+  fapi = uinfo['fapi']
 else:
-    fncConv = pft.fncConversion(fncfile)
+  fapi = None
+
+if 'verbose' in uinfo.keys():
+    fncConv = pft.fncConversion(fncfile,uinfo['verbose'],use_fapi=fapi)
+else:
+    fncConv = pft.fncConversion(fncfile,use_fapi=fapi)
     
 fncConv.read_conversion_parameters()
 

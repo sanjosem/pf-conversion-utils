@@ -282,6 +282,7 @@ class sncConversion(PFConversion):
         vert_per_face = self.face_conn['vert_per_face']
         face_to_node = self.face_conn['face_to_node']
 
+        min_L_threshold = (min_threshold)**0.5
 
         if surf_nfaces>0:
             tic = time.perf_counter()
@@ -325,38 +326,45 @@ class sncConversion(PFConversion):
                 area = self.face_conn['face_area'][glo_face_num] # normalized vector
 
                 # Find the most distant vertices of the face
-                idx_1, idx_2 = np.unravel_index(np.argmax(squareform(pdist(point_list))), (npoints,npoints))
+                dist_data = squareform(pdist(point_list))
+                d_max = np.max(dist_data)
+                if d_max>min_L_threshold:
+                    idx_1, idx_2 = np.unravel_index(np.argmax(dist_data), (npoints,npoints))
 
-                # Create a (u,v) 2D basis describing the face
-                u=point_list[idx_1,:]-point_list[idx_2,:]
-                u=u/np.linalg.norm(u)
+                    # Create a (u,v) 2D basis describing the face
+                    u=point_list[idx_1,:]-point_list[idx_2,:]
+                    u=u/np.linalg.norm(u)
 
-                v=np.cross(n,u) # u,v,n is an orthonormal base
+                    v=np.cross(n,u) # u,v,n is an orthonormal base
 
-                UV_pts=np.zeros((npoints,2))
-                UV_pts[:,0]=np.dot(point_list,u)
-                UV_pts[:,1]=np.dot(point_list,v)
+                    UV_pts=np.zeros((npoints,2))
+                    UV_pts[:,0]=np.dot(point_list,u)
+                    UV_pts[:,1]=np.dot(point_list,v)
 
-                check_area = 0.
-                try:
-                    tri=Delaunay(UV_pts)
-                    for simplex in tri.simplices:
-                        simplex_list=point_list[simplex,:]
-                        a=simplex_list[1,:]-simplex_list[0,:]
-                        b=simplex_list[2,:]-simplex_list[0,:]
-                        S=0.5*np.linalg.norm(np.cross(a,b))
-                        if S > min_threshold:
-                            tri_elm[ntri,:]=glo_vertex_list[simplex]
-                            ntri=ntri+1
-                            check_area += S
+                    check_area = 0.
+                    try:
+                        tri=Delaunay(UV_pts)
+                        for simplex in tri.simplices:
+                            simplex_list=point_list[simplex,:]
+                            a=simplex_list[1,:]-simplex_list[0,:]
+                            b=simplex_list[2,:]-simplex_list[0,:]
+                            S=0.5*np.linalg.norm(np.cross(a,b))
+                            if S > min_threshold:
+                                tri_elm[ntri,:]=glo_vertex_list[simplex]
+                                ntri=ntri+1
+                                check_area += S
 
-                    rel_err_area = max(rel_err_area,abs(check_area - area)/area)
+                        rel_err_area = max(rel_err_area,abs(check_area - area)/area)
 
-                except QhullError:
-                    pass
+                    except QhullError:
+                        pass
+                        count_null_surface+=1
+                        if self.verbose:
+                            print('! No connectivity found for face #{0:d}'.format(glo_face_num))
+                else:
                     count_null_surface+=1
                     if self.verbose:
-                        print('! No connectivity found for face #{0:d}'.format(glo_face_num))
+                        print('! Too small edges for face #{0:d} -  ignoring'.format(glo_face_num))
 
                 toc = time.perf_counter()
                 mean_time += toc-tic

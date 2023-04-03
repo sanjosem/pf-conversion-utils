@@ -112,7 +112,10 @@ class PFConversion:
             tmp = f.variables['lrf_constant_angular_vel_mag'][0]
             self.params['omega'] = tmp / self.params['coeff_dt']
 
-            n_rot0 = f.variables['lrf_initial_n_revolutions'][0] * pi * 2.0
+            if 'lrf_initial_n_revolutions' in f.variables.keys():
+                n_rot0 = f.variables['lrf_initial_n_revolutions'][0] * pi * 2.0
+            else:
+                n_rot0 = 0.0
             alpha0 = f.variables['lrf_initial_angular_rotation'][0] + n_rot0
 
             rotation_axis_origin = f.variables['lrf_axis_origin'][0,:]  # axe de rotation

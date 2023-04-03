@@ -4,7 +4,7 @@
 # Definitions
 # ###################################################
 SHELL := bash
-HOSTNAME := mec050570
+HOSTNAME := niagara
 
 include $(HOSTNAME).env
 

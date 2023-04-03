@@ -151,7 +151,7 @@ subroutine read_fnc_mesh(pfFile,coeff_dx,offset,ncells,selection, &
 
   do nc = 1, sel_ncells
     idx = selection(nc)+1
-    dx = 2**(1.0 + voxel_scales(nc))
+    dx = 2**(1.0 + voxel_scales(idx))
     cell_volumes(nc) = (dx * coeff_dx)**3
 
     vertices_coords(1+(nc-1)*8,1) = cell_coords(idx,1)
@@ -194,8 +194,9 @@ subroutine read_fnc_mesh(pfFile,coeff_dx,offset,ncells,selection, &
 
 end subroutine read_fnc_mesh
 
-subroutine read_fnc_frame(pfFile,frame_number,ncells,nnodes,selection,cell_volumes, &
-  connectivity,read_indices,scale_types,data_node,sel_ncells,nvars)
+subroutine read_fnc_frame(pfFile,frame_number,nnodes,selection,cell_volumes, &
+  connectivity,read_indices,scale_types,data_node,ncells,sel_ncells,nvars)
+  
 
   use netcdf
   use pf_params
@@ -209,7 +210,7 @@ subroutine read_fnc_frame(pfFile,frame_number,ncells,nnodes,selection,cell_volum
   integer, dimension(nvars), intent(in) :: read_indices
   integer, dimension(nvars), intent(in) :: scale_types
   integer*4, dimension(sel_ncells), intent(in) :: selection
-  real*8, dimension(sel_ncells), intent(in) :: cell_volumes
+  real*8, dimension(ncells), intent(in) :: cell_volumes
   integer*4, dimension(sel_ncells,8), intent(in) :: connectivity
   character(len=256),intent(in) :: pfFile
   real*8, dimension(nvars,nnodes), intent(out) :: data_node
@@ -225,6 +226,8 @@ subroutine read_fnc_frame(pfFile,frame_number,ncells,nnodes,selection,cell_volum
   real*8, allocatable, dimension(:) :: tmp, tmp_s, volume_node
   real*8, allocatable, dimension(:,:) :: buffer
   real*8, allocatable, dimension(:,:) :: data_cell
+
+  write(*,'(A,I9)') 'Number of nodes:',nnodes
 
   ncerr = nf90_open(pfFile, NF90_NOWRITE, ncid)
   ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
@@ -322,8 +325,9 @@ subroutine read_fnc_frame(pfFile,frame_number,ncells,nnodes,selection,cell_volum
   eps = 1.0e5
   do iv = 1,8
     do nc = 1,sel_ncells
+      glo_cell = selection(nc) + 1
       no = connectivity(nc,iv) + 1
-      cell_weight = cell_volumes(nc)*scale_nv
+      cell_weight = cell_volumes(glo_cell)*scale_nv
       do ivar = 1,nvars
         data_node(ivar,no) = data_node(ivar,no) + data_cell(nc,ivar)*cell_weight
       enddo

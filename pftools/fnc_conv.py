@@ -135,62 +135,71 @@ class fncConversion(PFConversion):
             if self.verbose:
                 print('Computing vertices coordinates for {0:s}'.format(dom))
 
-            if self.fapi:
-                cell_volumes,cell_coords,vertices_coords = Ffnc.read_fnc_mesh(self.pfFile,
-                                            self.params['coeff_dx'],self.params['offset_coords'],
-                                            self.params['ncells'],lst)
+            if nelm>0:
+                if self.fapi:
+                    print('Call to read_fnc_mesh')
+                    print(self.params['ncells'])
+                    print(lst.size)
+                    print(self.params['coeff_dx'])
+                    print(self.params['offset_coords'])
+                    cell_volumes,cell_coords,vertices_coords = Ffnc.read_fnc_mesh(self.pfFile,
+                                                self.params['coeff_dx'],self.params['offset_coords'],
+                                                self.params['ncells'],lst)
 
-                # scale coordinates
-                self.cell_coords[dom] = cell_coords
-                self.volume_cell[dom] = cell_volumes
+                    # scale coordinates
+                    self.cell_coords[dom] = cell_coords
+                    self.volume_cell[dom] = cell_volumes
+
+                else:
+
+                    # scale coordinates
+                    self.cell_coords[dom] = element_coords[lst,:] * self.params['coeff_dx']
+
+                    dx = 2**(1.0 + voxel_scales[lst])
+                    self.volume_cell[dom] = (self.params['coeff_dx']*dx)**3
+
+                    vertices_coords = np.zeros((nelm * 8, 3))
+                    basis = np.eye(3)
+                    vx = dx[:,np.newaxis]*basis[:,0][np.newaxis,:]
+                    vy = dx[:,np.newaxis]*basis[:,1][np.newaxis,:]
+                    vz = dx[:,np.newaxis]*basis[:,2][np.newaxis,:]
+
+                    vertices_coords[0::8, :] = element_coords[lst,:]
+                    vertices_coords[1::8, :] = element_coords[lst,:] + vx
+                    vertices_coords[2::8, :] = element_coords[lst,:] + vx + vy
+                    vertices_coords[3::8, :] = element_coords[lst,:]      + vy
+                    vertices_coords[4::8, :] = element_coords[lst,:]           + vz
+                    vertices_coords[5::8, :] = element_coords[lst,:] + vx      + vz
+                    vertices_coords[6::8, :] = element_coords[lst,:] + vx + vy + vz
+                    vertices_coords[7::8, :] = element_coords[lst,:]      + vy + vz
+
+                if self.verbose:
+                    print("Compute connectivity")
+
+                coords_view = np.ascontiguousarray(vertices_coords.round(4)).view(
+                                np.dtype((np.void, vertices_coords.dtype.itemsize * vertices_coords.shape[1])))
+                _, idx, inv = np.unique(coords_view, return_index=True, return_inverse=True)
+
+                coords_unique = self.params['coeff_dx']*vertices_coords[idx]
+
+                connectivity = np.arange(nelm * 8).reshape((nelm, 8))
+                new_connectivity = inv[connectivity]
+                nnodes = coords_unique.shape[0]
+                if self.verbose:
+                    print("  -> {0:d} nodes".format(nnodes))
+
+                self.node_coords[dom] = coords_unique
+                self.cell_conn[dom] = new_connectivity
+                self.vertex_to_node[dom] = deepcopy(idx)
+
+                if self.verbose:
+                    print('Bounding box in meters for domain {0:s}:'.format(dom))
+                    for idim,coor in enumerate(['x','y','z']):
+                        print('  {2:s}: [{0:.3e},{1:.3e}]'.format(
+                                self.cell_coords[dom][:,idim].min(),self.cell_coords[dom][:,idim].max(),coor))
 
             else:
-
-                # scale coordinates
-                self.cell_coords[dom] = element_coords[lst,:] * self.params['coeff_dx']
-
-                dx = 2**(1.0 + voxel_scales[lst])
-                self.volume_cell[dom] = (self.params['coeff_dx']*dx)**3
-
-                vertices_coords = np.zeros((nelm * 8, 3))
-                basis = np.eye(3)
-                vx = dx[:,np.newaxis]*basis[:,0][np.newaxis,:]
-                vy = dx[:,np.newaxis]*basis[:,1][np.newaxis,:]
-                vz = dx[:,np.newaxis]*basis[:,2][np.newaxis,:]
-
-                vertices_coords[0::8, :] = element_coords[lst,:]
-                vertices_coords[1::8, :] = element_coords[lst,:] + vx
-                vertices_coords[2::8, :] = element_coords[lst,:] + vx + vy
-                vertices_coords[3::8, :] = element_coords[lst,:]      + vy
-                vertices_coords[4::8, :] = element_coords[lst,:]           + vz
-                vertices_coords[5::8, :] = element_coords[lst,:] + vx      + vz
-                vertices_coords[6::8, :] = element_coords[lst,:] + vx + vy + vz
-                vertices_coords[7::8, :] = element_coords[lst,:]      + vy + vz
-
-            if self.verbose:
-                print("Compute connectivity")
-
-            coords_view = np.ascontiguousarray(vertices_coords.round(4)).view(
-                            np.dtype((np.void, vertices_coords.dtype.itemsize * vertices_coords.shape[1])))
-            _, idx, inv = np.unique(coords_view, return_index=True, return_inverse=True)
-
-            coords_unique = self.params['coeff_dx']*vertices_coords[idx]
-
-            connectivity = np.arange(nelm * 8).reshape((nelm, 8))
-            new_connectivity = inv[connectivity]
-            nnodes = coords_unique.shape[0]
-            if self.verbose:
-                print("  -> {0:d} nodes".format(nnodes))
-
-            self.node_coords[dom] = coords_unique
-            self.cell_conn[dom] = new_connectivity
-            self.vertex_to_node[dom] = deepcopy(idx)
-
-            if self.verbose:
-                print('Bounding box in meters for domain {0:s}:'.format(dom))
-                for idim,coor in enumerate(['x','y','z']):
-                    print('  {2:s}: [{0:.3e},{1:.3e}]'.format(
-                            self.cell_coords[dom][:,idim].min(),self.cell_coords[dom][:,idim].max(),coor))
+                print('No element for domain {0:s}'.format(dom))
 
         return vertices_coords
 
@@ -328,24 +337,42 @@ class fncConversion(PFConversion):
 
             for dom in self.domain.keys():
 
-                print('Converting data for domain \'{0:s}\''.format(dom))
-                nnodes =self.node_coords[dom].shape[0]
-                data_node = Ffnc.read_fnc_frame(self.pfFile,frame,
-                                 self.params['ncells'],nnodes,
-                                 self.domain[dom],self.volume_cell[dom],self.cell_conn[dom],
-                                 retrieve_index,scale_type)
+                if self.domain[dom].size>0:
 
-                # Storage
-                if self.data is None:
-                    self.data = dict()
+                    nnodes =self.node_coords[dom].shape[0]
+                    print('ncells:',self.params['ncells'])
+                    print('nnodes:',nnodes)
+                    # print('ncells:',self.params['ncells'])
+                    # print(self.volume_cell[dom].shape)
+                    # print(self.cell_conn[dom].shape)
+                    # print(self.domain[dom].shape)
+                    # print(retrieve_index)
+                    # print(scale_type)
+                    
+                    print('Converting data for domain \'{0:s}\''.format(dom))
 
-                nvars = len(retrieve_index)
-                self.data[dom] = data_node.reshape(1,nvars,nnodes)
+                    data_node = Ffnc.read_fnc_frame(self.pfFile,frame,
+                                    nnodes, self.domain[dom],self.volume_cell[dom],
+                                    self.cell_conn[dom],
+                                    retrieve_index,scale_type)
 
-                if self.verbose:
-                    stats = pd.DataFrame(data=self.data[dom].mean(axis=-1),columns=self.vars.keys())
-                    print('  -> Stats (nodes)')
-                    print(stats)
+                    print(data_node.shape)
+                    print(self.node_coords[dom].shape)
+
+                    # Storage
+                    if self.data is None:
+                        self.data = dict()
+
+                    nvars = len(retrieve_index)
+                    self.data[dom] = data_node.reshape(1,nvars,nnodes)
+
+                    if self.verbose:
+                        stats = pd.DataFrame(data=self.data[dom].mean(axis=-1),columns=self.vars.keys())
+                        print('  -> Stats (nodes)')
+                        print(stats)
+
+                else: 
+                    print(f'Nothing to do for {dom}')
 
 
     def params_to_fapi(self):
@@ -456,15 +483,18 @@ class fncConversion(PFConversion):
             self.read_volume_mesh()
 
         list_unStruct_Blocks = dict()
+
         for dom in self.domain.keys():
-            loc_nodes = self.node_coords[dom]
-            cell_elm = self.cell_conn[dom]
 
-            list_unStruct_Blocks[dom] = cells_to_vtkUnstruct(loc_nodes,cell_elm)
+            if self.domain[dom].size>0:
+                loc_nodes = self.node_coords[dom]
+                cell_elm = self.cell_conn[dom]
 
-            if self.data is not None:
-                list_unStruct_Blocks[dom] = data_to_vtkBlock(
-                    list_unStruct_Blocks[dom],self.data[dom][0,:,:],self.vars.keys())
+                list_unStruct_Blocks[dom] = cells_to_vtkUnstruct(loc_nodes,cell_elm)
+
+                if self.data is not None:
+                    list_unStruct_Blocks[dom] = data_to_vtkBlock(
+                        list_unStruct_Blocks[dom],self.data[dom][0,:,:],self.vars.keys())
 
         self.vtk_object = list_unStruct_Blocks
 
