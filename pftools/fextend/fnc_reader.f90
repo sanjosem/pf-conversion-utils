@@ -11,10 +11,10 @@ subroutine read_fnc_mesh(pfFile,coeff_dx,offset,ncells,selection, &
   real*8, dimension(3), intent(in) :: offset
   integer*4, dimension(sel_ncells), intent(in) :: selection
   character(len=256),intent(in) :: pfFile
-  real*8, dimension(ncells), intent(out) :: cell_volumes
+  real*8, dimension(sel_ncells), intent(out) :: cell_volumes
   !f2py depend(selection) :: sel_ncells=len(selection)
   real*8, dimension(ncells,3), intent(out) :: cell_coords
-  real*8, dimension(ncells*8,3), intent(out) :: vertices_coords
+  real*8, dimension(sel_ncells*8,3), intent(out) :: vertices_coords
 
   ! Local variables
   integer :: ncid,ncerr,measid
@@ -25,6 +25,13 @@ subroutine read_fnc_mesh(pfFile,coeff_dx,offset,ncells,selection, &
   real*8 :: dx
   real*8, allocatable, dimension(:) :: buffer
   real*8, allocatable, dimension(:) :: voxel_scales
+
+  if (pf_read_debug) then
+    write(*,*) 'Number of elements: ',ncells
+    write(*,*) 'Number of selected elements: ',sel_ncells
+    write(*,*) 'Shape vertices_coords: (',size(vertices_coords,1),'x',size(vertices_coords,2),')'
+    write(*,*) 'Shape cell_coords: (',size(cell_coords,1),'x',size(cell_coords,2),')'
+  endif
 
   if (pf_read_debug) write(*,'(A,1X,A,1X,A)') 'Opening file',TRIM(pfFile),'for reading'
 
@@ -149,6 +156,8 @@ subroutine read_fnc_mesh(pfFile,coeff_dx,offset,ncells,selection, &
   deallocate(idims)
   deallocate(count)
 
+
+  ! We are keeping vertices_coords unscaled to build the connectivity
   do nc = 1, sel_ncells
     idx = selection(nc)+1
     dx = 2**(1.0 + voxel_scales(idx))
@@ -189,13 +198,12 @@ subroutine read_fnc_mesh(pfFile,coeff_dx,offset,ncells,selection, &
     enddo
   enddo
 
-
   deallocate(voxel_scales)
 
 end subroutine read_fnc_mesh
 
-subroutine read_fnc_frame(pfFile,frame_number,nnodes,selection,cell_volumes, &
-  connectivity,read_indices,scale_types,data_node,ncells,sel_ncells,nvars)
+subroutine read_fnc_frame(pfFile,frame_number,nnodes,ncells,selection,cell_volumes, &
+  connectivity,read_indices,scale_types,data_node,sel_ncells,nvars)
   
 
   use netcdf
@@ -210,14 +218,14 @@ subroutine read_fnc_frame(pfFile,frame_number,nnodes,selection,cell_volumes, &
   integer, dimension(nvars), intent(in) :: read_indices
   integer, dimension(nvars), intent(in) :: scale_types
   integer*4, dimension(sel_ncells), intent(in) :: selection
-  real*8, dimension(ncells), intent(in) :: cell_volumes
+  real*8, dimension(sel_ncells), intent(in) :: cell_volumes
   integer*4, dimension(sel_ncells,8), intent(in) :: connectivity
   character(len=256),intent(in) :: pfFile
   real*8, dimension(nvars,nnodes), intent(out) :: data_node
 
   ! Local variables
   integer :: ncid,ncerr,measid
-  integer :: rank,k,idx,iv,ivar
+  integer :: rank,k,idx,iv,ivar,buffer_nvars
   integer*4 :: no, glo_cell,nc
   integer, dimension(5) :: meas_dim_ids
   integer, dimension(:), allocatable :: idims,start,count
@@ -285,6 +293,7 @@ subroutine read_fnc_frame(pfFile,frame_number,nnodes,selection,cell_volumes, &
   if (ncerr /= NF90_NOERR) stop
 
   if (debug_scaling) write(*,*) 'allocate data cell'
+  buffer_nvars = size(buffer,2)
 
   allocate(tmp(sel_ncells))
   allocate(tmp_s(sel_ncells))
@@ -296,6 +305,7 @@ subroutine read_fnc_frame(pfFile,frame_number,nnodes,selection,cell_volumes, &
 
     ! C to F index
     idx = read_indices(ivar) + 1
+    if (idx==0) idx = buffer_nvars
 
     do nc = 1,sel_ncells
       glo_cell = selection(nc) + 1
@@ -325,9 +335,8 @@ subroutine read_fnc_frame(pfFile,frame_number,nnodes,selection,cell_volumes, &
   eps = 1.0e5
   do iv = 1,8
     do nc = 1,sel_ncells
-      glo_cell = selection(nc) + 1
       no = connectivity(nc,iv) + 1
-      cell_weight = cell_volumes(glo_cell)*scale_nv
+      cell_weight = cell_volumes(nc)*scale_nv
       do ivar = 1,nvars
         data_node(ivar,no) = data_node(ivar,no) + data_cell(nc,ivar)*cell_weight
       enddo
@@ -335,7 +344,8 @@ subroutine read_fnc_frame(pfFile,frame_number,nnodes,selection,cell_volumes, &
     enddo
   enddo
 
-  eps = minval(cell_volumes)*0.01
+  eps = 1.0d-15
+  ! eps = minval(cell_volumes)*0.01
   if (debug_scaling) write(*,*) 'gather to node'
   if (debug_scaling) write(*,*) 'eps=',eps
 
@@ -420,7 +430,7 @@ subroutine get_cell_data(icell,nframes,pfFile,read_indices,scale_types,temporal_
 
   ! Local variables
   integer :: ncid,ncerr,measid
-  integer :: rank,k,idx,ivar,nt
+  integer :: rank,k,idx,ivar,nt,buffer_nvars
   integer, dimension(5) :: meas_dim_ids
   integer, dimension(:), allocatable :: idims,start,count
   character(len=256) :: dim_name
@@ -484,6 +494,7 @@ subroutine get_cell_data(icell,nframes,pfFile,read_indices,scale_types,temporal_
 
   allocate(tmp(nframes))
   allocate(tmp_s(nframes))
+  buffer_nvars = size(buffer,2)
 
   do ivar = 1,nvars
 
@@ -491,9 +502,10 @@ subroutine get_cell_data(icell,nframes,pfFile,read_indices,scale_types,temporal_
 
     ! C to F index
     idx = read_indices(ivar) + 1
+    if (idx==0) idx = buffer_nvars
 
     do nt = 1,nframes
-      tmp(nt) = buffer(idx,nt)
+      tmp(nt) = buffer(nt,idx)
     enddo
 
     if (debug_scaling) write(*,*) 'tmp is ready'

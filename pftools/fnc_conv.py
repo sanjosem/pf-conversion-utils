@@ -137,11 +137,6 @@ class fncConversion(PFConversion):
 
             if nelm>0:
                 if self.fapi:
-                    print('Call to read_fnc_mesh')
-                    print(self.params['ncells'])
-                    print(lst.size)
-                    print(self.params['coeff_dx'])
-                    print(self.params['offset_coords'])
                     cell_volumes,cell_coords,vertices_coords = Ffnc.read_fnc_mesh(self.pfFile,
                                                 self.params['coeff_dx'],self.params['offset_coords'],
                                                 self.params['ncells'],lst)
@@ -176,7 +171,8 @@ class fncConversion(PFConversion):
                 if self.verbose:
                     print("Compute connectivity")
 
-                coords_view = np.ascontiguousarray(vertices_coords.round(4)).view(
+                # this part is done for both py and fapi
+                coords_view = np.ascontiguousarray(vertices_coords.round(5)).view(
                                 np.dtype((np.void, vertices_coords.dtype.itemsize * vertices_coords.shape[1])))
                 _, idx, inv = np.unique(coords_view, return_index=True, return_inverse=True)
 
@@ -339,25 +335,16 @@ class fncConversion(PFConversion):
 
                 if self.domain[dom].size>0:
 
-                    nnodes =self.node_coords[dom].shape[0]
-                    print('ncells:',self.params['ncells'])
-                    print('nnodes:',nnodes)
-                    # print('ncells:',self.params['ncells'])
-                    # print(self.volume_cell[dom].shape)
-                    # print(self.cell_conn[dom].shape)
-                    # print(self.domain[dom].shape)
-                    # print(retrieve_index)
-                    # print(scale_type)
+                    nnodes = self.node_coords[dom].shape[0]
+                    ncells = self.params['ncells']
                     
                     print('Converting data for domain \'{0:s}\''.format(dom))
 
                     data_node = Ffnc.read_fnc_frame(self.pfFile,frame,
-                                    nnodes, self.domain[dom],self.volume_cell[dom],
+                                    nnodes,ncells,self.domain[dom],self.volume_cell[dom],
                                     self.cell_conn[dom],
                                     retrieve_index,scale_type)
 
-                    print(data_node.shape)
-                    print(self.node_coords[dom].shape)
 
                     # Storage
                     if self.data is None:
