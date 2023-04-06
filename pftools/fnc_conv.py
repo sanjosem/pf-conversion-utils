@@ -437,13 +437,18 @@ class fncConversion(PFConversion):
 
             instant = f'{frame:04d}'
 
-            gframe = gdata.create_group(instant)
+            if instant in list(gdata.keys()):
+                gframe = gdata[instant]
+            else:
+                gframe = gdata.create_group(instant)
             
             if self.vars is None:
                 self.define_measurement_variables()
                 
             if self.time is None:
                 self.extract_time_info()
+
+            print(self.time)
 
             gframe.create_dataset('time',data=self.time[frame])
 
