@@ -59,9 +59,13 @@ else:
     
 fncConv.read_conversion_parameters()
 
-fncConv.read_volume_mesh()
+outFile = os.path.join(uinfo['output_directory'],'param_pf_{0:s}.hdf5'.format(uinfo['casename']))
 
-outFile = fncConv.save_parameters(uinfo['casename'],uinfo['output_directory'])
+if os.path.isfile(outFile):
+    fncConv.load_parameters(outFile)
+else:
+    fncConv.read_volume_mesh()
+    outFile = fncConv.save_parameters(uinfo['casename'],uinfo['output_directory'])
 
 for frame_number in frame_list:
     fncConv.read_frame_data(frame_number)
