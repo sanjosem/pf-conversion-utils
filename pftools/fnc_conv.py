@@ -450,7 +450,7 @@ class fncConversion(PFConversion):
 
             print(self.time)
 
-            gframe.create_dataset('time',data=self.time[frame])
+            gframe.create_dataset('time',data=self.time['time_center'][frame])
 
             for dom in self.domain.keys():
 

@@ -63,11 +63,11 @@ outFile = os.path.join(uinfo['output_directory'],'param_pf_{0:s}.hdf5'.format(ui
 
 if os.path.isfile(outFile):
     fncConv.load_parameters(outFile)
+    print(fncConv.cell_conn.keys())
 else:
     fncConv.read_volume_mesh()
     outFile = fncConv.save_parameters(uinfo['casename'],uinfo['output_directory'])
 
 for frame_number in frame_list:
     fncConv.read_frame_data(frame_number)
-
     fncConv.save_instant(outFile,frame_number)
