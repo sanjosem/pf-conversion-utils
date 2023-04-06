@@ -133,7 +133,6 @@ class PFConversion:
 
             if self.verbose:
                 print("Rotating speed {0:.3f} rad/s".format(self.params['omega']))
-                print("Rotation {0:.3f} rad".format(self.params['init_angle']))
                 print("Initial mesh position {0:.3f} rad".format(self.params['init_angle']))
 
         else:

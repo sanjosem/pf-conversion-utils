@@ -50,11 +50,18 @@ if 'verbose' in uinfo.keys():
     fncConv = pft.fncConversion(fncfile,uinfo['verbose'],use_fapi=fapi)
 else:
     fncConv = pft.fncConversion(fncfile,use_fapi=fapi)
+
+
+if 'frame' in uinfo.keys():
+    frame_list = uinfo['frame']
+else:
+    frame_list = [0,]
     
 fncConv.read_conversion_parameters()
 
 fncConv.read_volume_mesh()
 
-fncConv.read_frame_data(0)
+for frame_number in frame_list:
+    fncConv.read_frame_data(frame_number)
 
-fncConv.save_vtk(uinfo['casename'],uinfo['output_directory'])
+    fncConv.save_vtk(f"{uinfo['casename']}_{frame_number:04d}",uinfo['output_directory'])
