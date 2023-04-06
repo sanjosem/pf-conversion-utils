@@ -396,7 +396,7 @@ class fncConversion(PFConversion):
         print("Adding volume mesh conversion arrays into:\n  ->  {0:s}".format(outFile))
 
         fparams = h5py.File(outFile,'a')
-        if self.data is not None and self.vertex_to_node is not None:
+        if self.domains is not None and self.vertex_to_node is not None:
             gdom = fparams.create_group("domains")
             for dom in self.domain.keys():
                 gcur = gdom.create_group(dom)
