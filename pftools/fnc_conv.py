@@ -393,10 +393,10 @@ class fncConversion(PFConversion):
         import h5py
 
         outFile = super().save_parameters(casename,dirout)
-        print("Adding volume mesh convertion arrays into:\n  ->  {0:s}".format(outFile))
+        print("Adding volume mesh conversion arrays into:\n  ->  {0:s}".format(outFile))
 
         fparams = h5py.File(outFile,'a')
-        if self.domain is not None and self.vertex_to_node is not None:
+        if self.data is not None and self.vertex_to_node is not None:
             gdom = fparams.create_group("domains")
             for dom in self.domain.keys():
                 gcur = gdom.create_group(dom)
@@ -411,6 +411,54 @@ class fncConversion(PFConversion):
 
         fparams.close()
         return outFile
+
+
+    def save_instant(self,outFile,frame):
+        """Method to export convertion parameters in a separated hdf5 file.
+
+        Parameters
+        ----------
+        casename : string
+            Label of the configuration
+        dirout : string
+            Directory for file export
+
+        """
+        import h5py
+
+        print("Adding variable data into:\n  ->  {0:s}".format(outFile))
+
+        fparams = h5py.File(outFile,'a')
+        if self.data is not None:
+            if not 'data' in list(fparams.keys()):
+                gdata = fparams.create_group("data")
+            else:
+                gdata = fparams['data']
+
+            instant = f'{frame:04d}'
+
+            gframe = gdata.create_group(instant)
+            
+            if self.vars is None:
+                self.define_measurement_variables()
+                
+            if self.time is None:
+                self.extract_time_info()
+
+            gframe.create_dataset('time',data=self.time[frame])
+
+            for dom in self.domain.keys():
+
+                if self.domain[dom].size>0:
+
+                    gcur = gframe.create_group(dom)
+
+                    for ivar,var in enumerate(self.vars.keys()):
+                        gcur.create_dataset(var, data=self.data[dom][0,ivar,:])
+                
+                        fparams.flush()
+
+        fparams.close()
 
 
     def load_parameters(self,h5file):
