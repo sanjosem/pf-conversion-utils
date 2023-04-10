@@ -272,114 +272,121 @@ subroutine read_fnc_frame(pfFile,frame_number,nnodes,ncells,selection,cell_volum
     stop
   endif
 
-  allocate(start(rank))
-  allocate(count(rank))
+  if (frame_number<idims(3)) then
 
-  allocate(buffer(idims(1),idims(2)))
+    allocate(start(rank))
+    allocate(count(rank))
 
-  start=(/1,1,frame_number+1/)
-  count=(/idims(1),idims(2),1/)
+    allocate(buffer(idims(1),idims(2)))
 
-  ncerr = nf90_get_var(ncid, measid, buffer,start = start, count=count )
-  ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
-  if (ncerr /= NF90_NOERR) stop
+    start=(/1,1,frame_number+1/)
+    count=(/idims(1),idims(2),1/)
 
-  deallocate(start)
-  deallocate(idims)
-  deallocate(count)
+    ncerr = nf90_get_var(ncid, measid, buffer,start = start, count=count )
+    ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+    if (ncerr /= NF90_NOERR) stop
 
-  ncerr = nf90_close(ncid)
-  ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
-  if (ncerr /= NF90_NOERR) stop
+    deallocate(start)
+    deallocate(idims)
+    deallocate(count)
 
-  if (debug_scaling) write(*,*) 'allocate data cell'
-  buffer_nvars = size(buffer,2)
+    ncerr = nf90_close(ncid)
+    ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
+    if (ncerr /= NF90_NOERR) stop
 
-  allocate(tmp(sel_ncells))
-  allocate(tmp_s(sel_ncells))
-  allocate(data_cell(sel_ncells,nvars))
+    if (debug_scaling) write(*,*) 'allocate data cell'
+    buffer_nvars = size(buffer,2)
 
-  do ivar = 1,nvars
+    allocate(tmp(sel_ncells))
+    allocate(tmp_s(sel_ncells))
+    allocate(data_cell(sel_ncells,nvars))
 
-    if (debug_scaling) write(*,*) 'scaling ivar=',ivar
+    do ivar = 1,nvars
 
-    ! C to F index
-    idx = read_indices(ivar) + 1
-    if (idx==0) idx = buffer_nvars
+      if (debug_scaling) write(*,*) 'scaling ivar=',ivar
 
-    do nc = 1,sel_ncells
-      glo_cell = selection(nc) + 1
-      tmp(nc) = buffer(glo_cell,idx)
+      ! C to F index
+      idx = read_indices(ivar) + 1
+      if (idx==0) idx = buffer_nvars
+
+      do nc = 1,sel_ncells
+        glo_cell = selection(nc) + 1
+        tmp(nc) = buffer(glo_cell,idx)
+      enddo
+
+      if (debug_scaling) write(*,*) 'tmp is ready'
+
+      call scale_var(scale_types(ivar),tmp,tmp_s,sel_ncells)
+      do nc = 1,sel_ncells
+        data_cell(nc,ivar) = tmp_s(nc)
+      enddo
+
+      if (pf_read_debug) write(*,*) 'cell data is scaled'
+
     enddo
 
-    if (debug_scaling) write(*,*) 'tmp is ready'
+    if (debug_scaling) write(*,*) 'scatter to vertices'
 
-    call scale_var(scale_types(ivar),tmp,tmp_s,sel_ncells)
-    do nc = 1,sel_ncells
-      data_cell(nc,ivar) = tmp_s(nc)
+    allocate(volume_node(nnodes))
+
+    if (debug_scaling) write(*,*) 'Initialize data_node and volume_node'
+    data_node(:,:) = 0.0d0
+    volume_node(:) = 0.0d0
+
+    scale_nv = 1.0d0/8.0d0
+    eps = 1.0e5
+    do iv = 1,8
+      do nc = 1,sel_ncells
+        no = connectivity(nc,iv) + 1
+        cell_weight = cell_volumes(nc)*scale_nv
+        do ivar = 1,nvars
+          data_node(ivar,no) = data_node(ivar,no) + data_cell(nc,ivar)*cell_weight
+        enddo
+        volume_node(no) = volume_node(no) + cell_weight
+      enddo
     enddo
 
-    if (pf_read_debug) write(*,*) 'cell data is scaled'
+    eps = 1.0d-15
+    ! eps = minval(cell_volumes)*0.01
+    if (debug_scaling) write(*,*) 'gather to node'
+    if (debug_scaling) write(*,*) 'eps=',eps
 
-  enddo
-
-  if (debug_scaling) write(*,*) 'scatter to vertices'
-
-  allocate(volume_node(nnodes))
-
-  if (debug_scaling) write(*,*) 'Initialize data_node and volume_node'
-  data_node(:,:) = 0.0d0
-  volume_node(:) = 0.0d0
-
-  scale_nv = 1.0d0/8.0d0
-  eps = 1.0e5
-  do iv = 1,8
-    do nc = 1,sel_ncells
-      no = connectivity(nc,iv) + 1
-      cell_weight = cell_volumes(nc)*scale_nv
+    do no=1,nnodes
+      ivol =  1.0d0 / max(volume_node(no),eps)
       do ivar = 1,nvars
-        data_node(ivar,no) = data_node(ivar,no) + data_cell(nc,ivar)*cell_weight
+        data_node(ivar,no) = data_node(ivar,no) * ivol
       enddo
-      volume_node(no) = volume_node(no) + cell_weight
     enddo
-  enddo
 
-  eps = 1.0d-15
-  ! eps = minval(cell_volumes)*0.01
-  if (debug_scaling) write(*,*) 'gather to node'
-  if (debug_scaling) write(*,*) 'eps=',eps
-
-  do no=1,nnodes
-    ivol =  1.0d0 / max(volume_node(no),eps)
-    do ivar = 1,nvars
-      data_node(ivar,no) = data_node(ivar,no) * ivol
-    enddo
-  enddo
-
-  if (debug_scaling) then
-    do ivar = 1,nvars
-      min_val =1.0d8
-      max_val =-1.0d8
-      mean_val = 0.0d0
-      mean2_val = 0.0d0
-      do no=1,nnodes
-        min_val = min(data_node(ivar,no),min_val)
-        max_val = max(data_node(ivar,no),max_val)
-        mean_val = mean_val + data_node(ivar,no)
-        mean2_val = mean2_val + data_node(ivar,no)**2
+    if (debug_scaling) then
+      do ivar = 1,nvars
+        min_val =1.0d8
+        max_val =-1.0d8
+        mean_val = 0.0d0
+        mean2_val = 0.0d0
+        do no=1,nnodes
+          min_val = min(data_node(ivar,no),min_val)
+          max_val = max(data_node(ivar,no),max_val)
+          mean_val = mean_val + data_node(ivar,no)
+          mean2_val = mean2_val + data_node(ivar,no)**2
+        enddo
+        mean_val = mean_val/nnodes
+        mean2_val = mean2_val/nnodes
+        std_val = sqrt(mean2_val-mean_val*mean_val)
+        write(*,'(A,I1,1X,A,E16.8,1X,A,E16.8,A)') 'ivar=',ivar,'(min=',min_val,' max=',max_val,')'
+        write(*,'(A,I1,1X,A,E16.8,1X,A,E16.8,A)') 'ivar=',ivar,'(mean=',mean_val,'std=',std_val,')'
       enddo
-      mean_val = mean_val/nnodes
-      mean2_val = mean2_val/nnodes
-      std_val = sqrt(mean2_val-mean_val*mean_val)
-      write(*,'(A,I1,1X,A,E16.8,1X,A,E16.8,A)') 'ivar=',ivar,'(min=',min_val,' max=',max_val,')'
-      write(*,'(A,I1,1X,A,E16.8,1X,A,E16.8,A)') 'ivar=',ivar,'(mean=',mean_val,'std=',std_val,')'
-    enddo
+    endif
+
+    deallocate(data_cell)
+    deallocate(buffer)
+    deallocate(tmp)
+    deallocate(tmp_s)
+
+  else
+    write(*,'(A,1X,I9)') "Max Frame Number should be:",idims(3)
+    stop
   endif
-
-  deallocate(data_cell)
-  deallocate(buffer)
-  deallocate(tmp)
-  deallocate(tmp_s)
 
 
 end subroutine read_fnc_frame

@@ -54,19 +54,24 @@ else:
 
 if 'frame' in uinfo.keys():
     frame_list = uinfo['frame']
+elif 'framelist' in uinfo.keys():
+    fl = uinfo['framelist']
+    frame_list = np.arange(fl['start'],fl['end'],fl['step'],dtype='i').tolist()
 else:
     frame_list = [0,]
-    
+
+
 fncConv.read_conversion_parameters()
 
 outFile = os.path.join(uinfo['output_directory'],'param_pf_{0:s}.hdf5'.format(uinfo['casename']))
 
 if os.path.isfile(outFile):
     fncConv.load_parameters(outFile)
-    print(fncConv.cell_conn.keys())
 else:
     fncConv.read_volume_mesh()
     outFile = fncConv.save_parameters(uinfo['casename'],uinfo['output_directory'])
+
+print(f'Frame to extract: {frame_list}')
 
 for frame_number in frame_list:
     fncConv.read_frame_data(frame_number)

@@ -678,7 +678,7 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
   real*8, allocatable, dimension(:,:,:), target :: storage
   real*8, allocatable, dimension(:) :: sel_face_weight
   integer :: ncurr
-  integer, parameter :: npart = 10
+  integer, parameter :: npart = 500
 
   ncerr = nf90_open(pfFile, NF90_NOWRITE, ncid)
   ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
@@ -747,11 +747,12 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
 
   ncurr = 0
 
+  if (pf_read_debug) call cpu_time(Time1)
+
   do
     nread = min(ncurr+npart,ntime) - ncurr
-    write(*,'(A,1X,I8,A,I8)') '  Reading part:',ncurr,' --> ',ncurr+nread
+    if (pf_read_debug) write(*,'(A,1X,I8,A,I8)') '  Reading part:',ncurr,' --> ',ncurr+nread
 
-    call cpu_time(Time1)
     read_buffer => buffer(:,:,1:nread)
 
     start=(/1,1,ncurr+1/)
@@ -760,7 +761,7 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
     ncerr = nf90_get_var(ncid, measid, read_buffer,start = start, count=count )
     ! if (ncerr /= NF90_NOERR) call handle_error(ncerr)
     if (ncerr /= NF90_NOERR) stop
-    call cpu_time(Time2)
+    
 
     do nt=1,nread
       do ivar = 1,idims(2)
@@ -771,15 +772,13 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
         enddo ! Loop selected faces
       enddo
     enddo
-    call cpu_time(Time3)
-
-    write(*,'(A,1X,E16.8,1X,A)') '     --> Time to read part:',Time2-Time1,'s'
-    write(*,'(A,1X,E16.8,1X,A)') '     --> Time to store part:',Time3-Time2,'s'
 
     ncurr = ncurr + nread
     if (ncurr >= ntime) exit
 
   enddo ! Loop parts
+
+  if (pf_read_debug) call cpu_time(Time2)
 
   do ivar = 1,nvars
 
@@ -807,7 +806,12 @@ subroutine read_time_sequence(pfFile,ntime,nfaces,face_selection,              &
     enddo ! loop selected faces
 
   enddo ! loop var
+  if (pf_read_debug) call cpu_time(Time3)
 
+  if (pf_read_debug) then
+    write(*,'(A,1X,E16.8,1X,A)') '     --> Time to read:',Time2-Time1,'s'
+    write(*,'(A,1X,E16.8,1X,A)') '     --> Time to convert:',Time3-Time2,'s'
+  endif
 
   deallocate(start)
   deallocate(idims)

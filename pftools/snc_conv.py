@@ -607,12 +607,70 @@ class sncConversion(PFConversion):
             for surface_name in self.mesh.keys():
                 subgrp = grp.create_group(surface_name)
                 res = self.mesh[surface_name]
+                loc_nodes = self.node_coords[res['glo_nodes']]
+                tri = res['loc_tri']
+                qua = res['loc_qua']
                 subgrp.create_dataset('lst_faces', data=res['glo_faces']) #, dtype='i8')
                 subgrp.create_dataset('glo_node_list', data=res['glo_nodes'])
+                fparams.flush()
+                subgrp.create_dataset('coordinates', data=loc_nodes)
+                fparams.flush()
+                subgrp.create_dataset('qua_conn', data=qua)
+                subgrp.create_dataset('tri_conn', data=tri)
                 fparams.flush()
 
         fparams.close()
         return outFile
+
+    
+    def save_instant(self,outFile,surface_name,frame):
+        """Method to export data in a separated hdf5 file.
+
+        Parameters
+        ----------
+        outFile : string
+            Filename into which append data
+        frame : 
+            The frame number to dump
+
+        """
+        import h5py
+
+        print("Adding variable data into:\n  ->  {0:s}".format(outFile))
+
+        fparams = h5py.File(outFile,'a')
+        if self.data is not None:
+            if not 'data' in list(fparams.keys()):
+                gdata = fparams.create_group("data")
+            else:
+                gdata = fparams['data']
+
+            if self.data[surface_name].size>0:
+                if surface_name in list(gdata.keys()):
+                    gsurf = gdata[surface_name]
+                else:
+                    gsurf = gdata.create_group(surface_name)
+
+                instant = f'{frame:04d}'
+
+                if self.vars is None:
+                    self.define_measurement_variables()
+                    
+                if self.time is None:
+                    self.extract_time_info()
+
+                if instant in list(gsurf.keys()):
+                    print(f'{instant} already exist, removing it')
+                    del gsurf[instant]
+
+                gframe = gsurf.create_group(instant)
+                gframe.create_dataset('time',data=self.time['time_center'][frame])
+
+                for ivar,var in enumerate(self.vars.keys()):
+                    gframe.create_dataset(var, data=self.data[surface_name][0,ivar,:])                
+                    fparams.flush()
+
+        fparams.close()        
 
     def load_parameters(self,h5file):
 

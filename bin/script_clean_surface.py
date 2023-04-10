@@ -35,7 +35,7 @@ if 'face_names' not in uinfo.keys():
 if not os.path.isdir(uinfo['directory']):
     sys.exit('Directory {0:s} cannot be found'.format(uinfo['directory']))
 if not os.path.isdir(uinfo['output_directory']):
-    makedirs(uinfo['output_directory'])
+    makedirs(uinfo['output_directory'],exist_ok=True)
 
 sncfile = os.path.join(uinfo['directory'],uinfo['snc_filename'])
 
@@ -48,6 +48,11 @@ if 'verbose' in uinfo.keys():
     sncConv = pfsnct.sncConversion(sncfile,uinfo['verbose'])
 else:
     sncConv = pfsnct.sncConversion(sncfile)
+
+if 'save_format' in uinfo.keys():
+    save_format = uinfo['save_format']
+else:
+    save_format = 'vtk'
 
 sncConv.read_conversion_parameters()
 
@@ -64,6 +69,15 @@ else:
     for name in list_av_face_names:
         uinfo['face_names'][name] = [name,]
 
+if 'frame' in uinfo.keys():
+    frame_list = uinfo['frame']
+elif 'framelist' in uinfo.keys():
+    fl = uinfo['framelist']
+    frame_list = np.arange(fl['start'],fl['end'],fl['step'],dtype='i').tolist()
+else:
+    frame_list = [0,]
+print(frame_list)
+
 sncConv.read_coordinates()
 sncConv.read_connectivity()
 
@@ -78,14 +92,13 @@ elif 'probes_file'  in uinfo.keys():
         work_list = (uinfo['probes_file_sheet'],)
     else:
         work_list = ldf.keys()
-    print(work_list)
-    print(ldf.keys())
     for pbcol in work_list:
         for ip in range(ldf[pbcol].shape[0]):
             probe_name = '{0:s}-{1:s}'.format(pbcol,ldf[pbcol].loc[ip,'probe_name'])
             print('extracting probe {0:s}'.format(probe_name))
             sncConv.extract_probe(probe_name,(ldf[pbcol].loc[ip,'x'],ldf[pbcol].loc[ip,'y'],ldf[pbcol].loc[ip,'z']))
-    sncConv.export_temporal_data(uinfo['casename'],uinfo['output_directory'],delimiter=',')
+    # sncConv.export_temporal_data(uinfo['casename'],uinfo['output_directory'],delimiter=',')
+    sncConv.export_temporal_data(uinfo['casename'],uinfo['output_directory'],extension='pkl')
 
 else:
 
@@ -97,7 +110,15 @@ else:
         for surface_name in uinfo['face_names'].keys():
             sncConv.triangulate_surface(surface_name,uinfo['face_names'][surface_name])
 
+    if save_format == 'hdf5':
+        outFile = sncConv.save_parameters(uinfo['casename'],uinfo['output_directory'])
 
-    for surface_name in uinfo['face_names'].keys():
-        sncConv.read_frame_data(surface_name,0)
-    sncConv.save_vtk(uinfo['casename'],uinfo['output_directory'])
+    for frame_number in frame_list:
+        print(f' ** Reading frame {frame_number}')
+        for surface_name in uinfo['face_names'].keys():
+            sncConv.read_frame_data(surface_name,frame_number)
+
+            if save_format == 'vtk':
+                sncConv.save_vtk(f"{uinfo['casename']}_{frame_number:04d}",uinfo['output_directory'])
+            elif save_format == 'hdf5':                
+                sncConv.save_instant(outFile,surface_name,frame_number)

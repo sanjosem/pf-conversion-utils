@@ -258,7 +258,8 @@ class fncConversion(PFConversion):
                         data_cell[:,ivar,:] =  tmp[:,idx,:] * self.params['coeff_vel']
 
                 if self.verbose:
-                    stats = pd.DataFrame(data=data_cell.mean(axis=-1),columns=self.vars.keys())
+                    stats = pd.DataFrame(data=data_cell.mean(axis=-1),
+                                         columns=self.vars.keys(),index=[frame,])
                     print('  -> Stats (cell)')
                     print(stats)
 
@@ -297,7 +298,8 @@ class fncConversion(PFConversion):
                 if self.verbose:
                     print(self.data[dom].shape)
                     print(self.data[dom].mean(axis=-1).shape)
-                    stats = pd.DataFrame(data=self.data[dom].mean(axis=-1),columns=self.vars.keys())
+                    stats = pd.DataFrame(data=self.data[dom].mean(axis=-1),
+                                         columns=self.vars.keys(),index=[frame,])
                     print('  -> Stats (nodes)')
                     print(stats)
 
@@ -354,7 +356,8 @@ class fncConversion(PFConversion):
                     self.data[dom] = data_node.reshape(1,nvars,nnodes)
 
                     if self.verbose:
-                        stats = pd.DataFrame(data=self.data[dom].mean(axis=-1),columns=self.vars.keys())
+                        stats = pd.DataFrame(data=self.data[dom].mean(axis=-1),
+                                             columns=self.vars.keys(),index=[frame,])
                         print('  -> Stats (nodes)')
                         print(stats)
 
@@ -396,8 +399,8 @@ class fncConversion(PFConversion):
         print("Adding volume mesh conversion arrays into:\n  ->  {0:s}".format(outFile))
 
         fparams = h5py.File(outFile,'a')
-        if self.domains is not None and self.vertex_to_node is not None:
-            gdom = fparams.create_group("domains")
+        if self.domain is not None and self.vertex_to_node is not None:
+            gdom = fparams.create_group("domain")
             for dom in self.domain.keys():
                 gcur = gdom.create_group(dom)
                 gcur.create_dataset('glo_cell_indices', data=self.domain[dom])
@@ -437,31 +440,27 @@ class fncConversion(PFConversion):
 
             instant = f'{frame:04d}'
 
-            if instant in list(gdata.keys()):
-                gframe = gdata[instant]
-            else:
-                gframe = gdata.create_group(instant)
-            
             if self.vars is None:
                 self.define_measurement_variables()
                 
             if self.time is None:
                 self.extract_time_info()
 
-            print(self.time)
+            if instant in list(gdata.keys()):
+                print(f'{instant} already exist, removing it')
+                del gdata[instant]
 
+            gframe = gdata.create_group(instant)
             gframe.create_dataset('time',data=self.time['time_center'][frame])
 
             for dom in self.domain.keys():
-
                 if self.domain[dom].size>0:
-
                     gcur = gframe.create_group(dom)
-
                     for ivar,var in enumerate(self.vars.keys()):
-                        gcur.create_dataset(var, data=self.data[dom][0,ivar,:])
-                
+                        gcur.create_dataset(var, data=self.data[dom][0,ivar,:])                
                         fparams.flush()
+
+            
 
         fparams.close()
 
@@ -482,11 +481,11 @@ class fncConversion(PFConversion):
 
         print("Loading the fnc connectivity and geometry file:\n  ->  {0:s}".format(h5file))
 
-        if fparams.get('domains',getclass=True) is None:
-            RuntimeError('No domains group file, {0:s} is is not valid for fnc'.format(self.format))
+        if fparams.get('domain',getclass=True) is None:
+            RuntimeError('No domain group file, {0:s} is is not valid for fnc'.format(self.format))
 
-        if not fparams.get('domains',getclass=True) is None:
-            if fparams.get('domains',getclass=True) == h5py.Group:
+        if not fparams.get('domain',getclass=True) is None:
+            if fparams.get('domain',getclass=True) == h5py.Group:
                 self.domain = dict()
                 self.cell_coords = dict()
                 self.volume_cell = dict()
@@ -494,10 +493,10 @@ class fncConversion(PFConversion):
                 self.cell_conn = dict()
                 self.vertex_to_node = dict()
                 for dom in ['stator','rotor']:
-                    if not fparams.get('domains/{0:s}'.format(dom),getclass=True) is None:
-                        if fparams.get('domains/{0:s}'.format(dom),getclass=True) == h5py.Group:
+                    if not fparams.get('domain/{0:s}'.format(dom),getclass=True) is None:
+                        if fparams.get('domain/{0:s}'.format(dom),getclass=True) == h5py.Group:
 
-                            grp = fparams['domains/{0:s}'.format(dom)]
+                            grp = fparams['domain/{0:s}'.format(dom)]
                             self.domain[dom] = grp['glo_cell_indices'][()]
                             self.cell_coords[dom] = grp['cell_coords'][()]
                             self.volume_cell[dom] = grp['volume_cell'][()]

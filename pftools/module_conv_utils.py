@@ -400,5 +400,9 @@ class PFConversion:
         for probe_name in self.probe.keys():
             outFile = os.path.join(dirout,'temporal_{0:s}_{2:s}.{1:s}'.format(
                         casename,ext,probe_name))
-            print("Exporting in ascii column format:\n  ->  {0:s}".format(outFile))
-            self.probe[probe_name].to_csv(outFile,sep=delimiter,index=index)
+            if extension == 'pkl':
+                print("Exporting in pickle format:\n  ->  {0:s}".format(outFile))
+                self.probe[probe_name].to_pickle(outFile)
+            else:
+                print("Exporting in ascii column format:\n  ->  {0:s}".format(outFile))
+                self.probe[probe_name].to_csv(outFile,sep=delimiter,index=index)
