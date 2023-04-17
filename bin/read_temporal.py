@@ -53,5 +53,6 @@ for fl in liste:
         pncConv = pftools.pnc_conv.pncConversion(fl)
                 
     pncConv.extract_probe()
+    pncConv.get_probe_location()
     pncConv.export_temporal_data(casename,uinfo['output_directory'],delimiter=uinfo['delimiter'])
     

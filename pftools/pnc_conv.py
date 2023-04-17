@@ -37,7 +37,33 @@ class pncConversion(PFConversion):
         if self.verbose:
             print('PF file format is: {0:s}'.format(self.format))
         
-        
+    def get_probe_location(self):
+        """Collect probe location"""
+
+        if self.params is None:
+            self.read_conversion_parameters()
+
+        if self.format == 'volume-probe':
+            f = netcdf.Dataset(self.pfFile, 'r')
+
+            self.params['ncells'] = f.dimensions['npoints'].size
+            self.params['ndims'] = f.dimensions['ndims'].size
+
+            element_coords = f.variables['coords'][()].astype('float')
+
+            f.close()
+
+            for idim in range(self.params['ndims']):
+                element_coords[:,idim]+=self.params['offset_coords'][idim]
+            element_coords *=  self.params['coeff_dx']
+            
+            # if self.verbose:
+            print(f'Probe elements: {self.params['ncells']}')
+            print('Probe location:')
+            print(element_coords.mean(axis=0))
+
+
+
     def compute_probe_weight(self):
         """Collect volume/surface scaling and store it in the class instance
         The results is stored in the class instance 
