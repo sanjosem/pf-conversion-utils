@@ -37,7 +37,7 @@ if not os.path.isdir(uinfo['directory']):
 if not os.path.isdir(uinfo['output_directory']):
     makedirs(uinfo['output_directory'])
     
-liste = glob('{0:s}/{1:s}*.{2:s}'.format(uinfo['directory'],uinfo['probe_name'],uinfo['file_type']))
+liste = sorted(glob('{0:s}/{1:s}*.{2:s}'.format(uinfo['directory'],uinfo['probe_name'],uinfo['file_type'])))
 
 if len(liste) == 0:
     sys.exit('No probe file \'{1:s}*.{2:s}\' found in directory {0:s}'.format(uinfo['directory'],uinfo['probe_name'],uinfo['file_type']))
@@ -64,8 +64,10 @@ for fl in liste:
     pncConv.export_temporal_data(casename,uinfo['output_directory'],delimiter=uinfo['delimiter'])
     
 DataFrame(probe_info).to_csv(os.path.join(uinfo['output_directory'],'probe_info.csv'))
-if verbose in uinfo.keys():
+if 'verbose' in uinfo.keys():
     if uinfo['verbose']:
         print(DataFrame(probe_info))
+    else: 
+        print('Probe location information is written in probe_info.csv')
 else: 
     print('Probe location information is written in probe_info.csv')
