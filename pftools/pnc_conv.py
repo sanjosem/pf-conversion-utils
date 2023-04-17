@@ -155,7 +155,7 @@ class pncConversion(PFConversion):
                 else:
                     idx = self.vars['static_pressure']
                     data[var] =  ( mean_meas[:,idx] * self.params['weight_pressure_to_rho']
-                                * self.params['coeff_press'] )
+                                * self.params['coeff_density'] )
             if var in ['x_velocity','y_velocity','z_velocity']:
                 data[var] =  mean_meas[:,idx] * self.params['coeff_vel'] 
         
@@ -163,5 +163,4 @@ class pncConversion(PFConversion):
             self.probe = dict()
             
         self.probe[self.format] = DataFrame(data=data)
-        
         
