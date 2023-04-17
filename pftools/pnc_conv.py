@@ -39,6 +39,9 @@ class pncConversion(PFConversion):
         
     def get_probe_location(self):
         """Collect probe location"""
+        import netCDF4 as netcdf
+
+        center = None
 
         if self.params is None:
             self.read_conversion_parameters()
@@ -46,21 +49,27 @@ class pncConversion(PFConversion):
         if self.format == 'volume-probe':
             f = netcdf.Dataset(self.pfFile, 'r')
 
-            self.params['ncells'] = f.dimensions['npoints'].size
-            self.params['ndims'] = f.dimensions['ndims'].size
+            ncells = f.dimensions['npoints'].size
+            ndims = f.dimensions['ndims'].size
 
             element_coords = f.variables['coords'][()].astype('float')
 
             f.close()
 
-            for idim in range(self.params['ndims']):
+            for idim in range(ndims):
                 element_coords[:,idim]+=self.params['offset_coords'][idim]
             element_coords *=  self.params['coeff_dx']
+            center = element_coords.mean(axis=0)
+
+            if self.verbose:
+              print(f'Probe elements: {ncells}')
+              print(f'Probe location: {center[0]} {center[1]} {center[2]}')
+
+        else:
+          raise NotImplementedError
+
+        return center
             
-            # if self.verbose:
-            print(f'Probe elements: {self.params['ncells']}')
-            print('Probe location:')
-            print(element_coords.mean(axis=0))
 
 
 
