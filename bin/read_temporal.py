@@ -46,7 +46,7 @@ probe_info = {'name': [], 'xc': [], 'yc': [], 'zc': []}
 
 for fl in liste:
     probe_file = os.path.basename(fl)
-    casename = probe_file.replace('.psnc','').replace('.pfnc','')
+    casename = probe_file.replace('.psnc','').replace('.pfnc','').replace('.csnc','')
     probe_info['name'].append(casename)
 
     print('*** Processing {0:s} ***'.format(probe_file))
@@ -57,6 +57,7 @@ for fl in liste:
         pncConv = pftools.pnc_conv.pncConversion(fl)
                 
     pncConv.extract_probe()
+
     center = pncConv.get_probe_location()
     for idim,coor in enumerate(['xc','yc','zc']):
         probe_info[coor].append(center[idim])

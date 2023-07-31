@@ -29,6 +29,8 @@ class pncConversion(PFConversion):
             self.format = 'surface-probe'
         elif ext == 'pfnc':
             self.format = 'volume-probe'
+        elif ext == 'csnc':
+            self.format = 'composite'
         else:
             raise RuntimeError('This is not a probe file')
         self.iscale = None
@@ -42,7 +44,7 @@ class pncConversion(PFConversion):
         import netCDF4 as netcdf
         import numpy as np
 
-        center = None
+        center = np.zeros((3,))
 
         if self.params is None:
             self.read_conversion_parameters()
@@ -124,6 +126,8 @@ class pncConversion(PFConversion):
             self.weight = f.variables['fluid_volumes'][()] * self.params['coeff_dx']**3
         elif self.format == 'surface-probe':
             self.weight = f.variables['surfel_area'][()] * self.params['coeff_dx']**2
+        elif self.format == 'composite':
+            self.weight = f.variables['face_area'][()] * self.params['coeff_dx']**2
 
         # Average point
         intv = self.weight.sum()
@@ -141,6 +145,8 @@ class pncConversion(PFConversion):
                 print('  -> Area: {0:e} m2'.format(intv))
                 rad = (intv/pi)**0.5
                 print('  -> Radius: {0:e} m'.format(rad))
+            if self.format == 'composite':
+                print('  -> Area: {0:e} m2'.format(intv))
 
     def extract_probe(self):
         """Function that read and convert data as probe data in SI units
@@ -188,7 +194,14 @@ class pncConversion(PFConversion):
                     data[var] =  ( mean_meas[:,idx] * self.params['weight_pressure_to_rho']
                                 * self.params['coeff_density'] )
             if var in ['x_velocity','y_velocity','z_velocity']:
-                data[var] =  mean_meas[:,idx] * self.params['coeff_vel'] 
+                data[var] = mean_meas[:,idx] * self.params['coeff_vel'] 
+            if var in ['surface_x_force','surface_y_force','surface_z_force']:
+                data[var] = ( mean_meas[:,idx] * self.params['coeff_press'] 
+                              * self.params['coeff_dx']**2 )
+            if var in ['mass_flux',]:
+                data[var] = ( mean_meas[:,idx] * self.params['coeff_density']
+                              * self.params['coeff_vel'] 
+                              * self.params['coeff_dx']**2 )
         
         if self.probe is None:
             self.probe = dict()

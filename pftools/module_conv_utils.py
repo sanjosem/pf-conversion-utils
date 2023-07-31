@@ -167,7 +167,9 @@ class PFConversion:
 
         # Parse var name to find index
         for iv,var in enumerate(var_list):
-            if var in ['x_velocity','y_velocity','z_velocity','static_pressure','density']:
+            if var in ['x_velocity','y_velocity','z_velocity','static_pressure',
+                       'density','surface_x_force','surface_y_force','surface_z_force',
+                        'mass_flux']:
                 self.vars[var] = iv
                 if var == 'static_pressure':
                     self.vars['density'] = -1
