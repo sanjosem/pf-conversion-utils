@@ -199,6 +199,8 @@ class pncConversion(PFConversion):
                 data[var] = mean_meas[:,idx] * self.params['coeff_vel'] * self.iscale
             if var in ['surface_x_force','surface_y_force','surface_z_force']:
                 data[var] = mean_meas[:,idx] * self.params['coeff_force']
+            if var in ['surface_x_torque','surface_y_torque','surface_z_torque']:
+                data[var] = mean_meas[:,idx] * self.params['coeff_torque']
             if var in ['mass_flux',]:
                 data[var] = mean_meas[:,idx] * self.params['coeff_massflux']
         

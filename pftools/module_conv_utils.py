@@ -66,6 +66,7 @@ class PFConversion:
         self.params['dt'] = self.params['CFL_number'] * self.params['coeff_dt']
         self.params['coeff_press'] = lx_scales[1] * lx_scales[3]**2
         self.params['coeff_force'] = self.params['coeff_press']
+        self.params['coeff_torque'] = self.params['coeff_press'] * lx_scales[0]
         self.params['coeff_vel'] = lx_scales[3]
         self.params['coeff_massflux'] = lx_scales[1] * lx_scales[3]
         self.params['coeff_density'] = lx_scales[1]
@@ -171,7 +172,7 @@ class PFConversion:
         for iv,var in enumerate(var_list):
             if var in ['x_velocity','y_velocity','z_velocity','static_pressure',
                        'density','surface_x_force','surface_y_force','surface_z_force',
-                        'mass_flux']:
+                        'mass_flux','surface_x_torque','surface_y_torque','surface_z_torque',]:
                 self.vars[var] = iv
                 if var == 'static_pressure':
                     self.vars['density'] = -1
