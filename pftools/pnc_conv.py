@@ -132,6 +132,7 @@ class pncConversion(PFConversion):
         # Average point
         intv = self.weight.sum()
         self.iscale = 1.0/float(intv)
+
         
         f.close()
 
@@ -172,7 +173,7 @@ class pncConversion(PFConversion):
         
         f = netcdf.Dataset(self.pfFile, 'r')
         meas = f.variables['measurements'][()] * self.weight
-        mean_meas = meas.sum(axis=-1) * self.iscale
+        mean_meas = meas.sum(axis=-1) 
         f.close()
         
         for var in self.vars.keys():
@@ -181,27 +182,25 @@ class pncConversion(PFConversion):
             if var == 'static_pressure':
                 if idx>=0 :
                     data[var] = ( ( mean_meas[:,idx] + self.params['offset_pressure'] ) 
-                                * self.params['coeff_press'] )
+                                * self.params['coeff_press'] ) * self.iscale
                 else:
                     idx = self.vars['density']
-                    data[var] =  ( mean_meas[:,idx] * self.params['weight_rho_to_pressure']
-                                + self.params['offset_pressure'] ) * self.params['coeff_press']
+                    data[var] = ( ( mean_meas[:,idx] * self.params['weight_rho_to_pressure'] 
+                                   + self.params['offset_pressure'] ) 
+                                * self.params['coeff_press'] * self.iscale )
             if var == 'density':
                 if idx>=0:
-                    data[var] = mean_meas[:,idx] * self.params['coeff_density'] 
+                    data[var] = mean_meas[:,idx] * self.params['coeff_density'] * self.iscale
                 else:
                     idx = self.vars['static_pressure']
                     data[var] =  ( mean_meas[:,idx] * self.params['weight_pressure_to_rho']
-                                * self.params['coeff_density'] )
+                                * self.params['coeff_density'] ) * self.iscale
             if var in ['x_velocity','y_velocity','z_velocity']:
-                data[var] = mean_meas[:,idx] * self.params['coeff_vel'] 
+                data[var] = mean_meas[:,idx] * self.params['coeff_vel'] * self.iscale
             if var in ['surface_x_force','surface_y_force','surface_z_force']:
-                data[var] = ( mean_meas[:,idx] * self.params['coeff_press'] 
-                              * self.params['coeff_dx']**2 )
+                data[var] = mean_meas[:,idx] * self.params['coeff_force']
             if var in ['mass_flux',]:
-                data[var] = ( mean_meas[:,idx] * self.params['coeff_density']
-                              * self.params['coeff_vel'] 
-                              * self.params['coeff_dx']**2 )
+                data[var] = mean_meas[:,idx] * self.params['coeff_massflux']
         
         if self.probe is None:
             self.probe = dict()

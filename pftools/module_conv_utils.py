@@ -65,7 +65,9 @@ class PFConversion:
         self.params['coeff_dt'] = lx_scales[0] / lx_scales[3]
         self.params['dt'] = self.params['CFL_number'] * self.params['coeff_dt']
         self.params['coeff_press'] = lx_scales[1] * lx_scales[3]**2
+        self.params['coeff_force'] = self.params['coeff_press']
         self.params['coeff_vel'] = lx_scales[3]
+        self.params['coeff_massflux'] = lx_scales[1] * lx_scales[3]
         self.params['coeff_density'] = lx_scales[1]
         self.params['offset_pressure'] = lx_offsets[4]
 
