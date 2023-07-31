@@ -40,6 +40,7 @@ class pncConversion(PFConversion):
     def get_probe_location(self):
         """Collect probe location"""
         import netCDF4 as netcdf
+        import numpy as np
 
         center = None
 
@@ -65,8 +66,38 @@ class pncConversion(PFConversion):
               print(f'Probe elements: {ncells}')
               print(f'Probe location: {center[0]} {center[1]} {center[2]}')
 
-        else:
-          raise NotImplementedError
+        elif self.format == 'surface-probe':
+          
+            f = netcdf.Dataset(self.pfFile, 'r')
+            nfaces = f.dimensions['npoints'].size
+            nvertices = f.dimensions['nvertex_refs'].size
+            ndims = f.dimensions['ndims'].size
+            coords=f.variables['vertex_coords'][()]
+            first_vertex = f.variables['first_vertex_refs'][()]
+            vertex_list = f.variables['vertex_refs'][()]
+            vert_per_face = np.zeros((nfaces,),dtype='int')
+            vert_per_face[:-1] = first_vertex[1:] - first_vertex[:-1]
+            vert_per_face[-1] = nvertices - first_vertex[-1]
+            f.close()
+
+            # Offset coordinates
+            for idim in range(ndims):
+                coords[:,idim]+=self.params['offset_coords'][idim]
+
+            # scale coordinates
+            coords *= self.params['coeff_dx']
+
+            face_coords = np.zeros((nfaces,3))
+            for iface in range(nfaces):
+                istart = first_vertex[iface]
+                nvert = vert_per_face[iface]
+                face_coords[iface,:] = coords[vertex_list[istart:istart+nvert],:].mean(axis=0)
+
+            center = face_coords.mean(axis=0)
+
+            if self.verbose:
+              print(f'Probe faces: {nfaces}')
+              print(f'Probe location: {center[0]} {center[1]} {center[2]}')
 
         return center
             
