@@ -181,13 +181,13 @@ class pncConversion(PFConversion):
             idx = self.vars[var]
             if var == 'static_pressure':
                 if idx>=0 :
-                    data[var] = ( ( mean_meas[:,idx] + self.params['offset_pressure'] ) 
-                                * self.params['coeff_press'] ) * self.iscale
+                    data[var] = ( ( mean_meas[:,idx] * self.iscale + self.params['offset_pressure'] ) 
+                                * self.params['coeff_press'] ) 
                 else:
                     idx = self.vars['density']
-                    data[var] = ( ( mean_meas[:,idx] * self.params['weight_rho_to_pressure'] 
+                    data[var] = ((mean_meas[:, idx] * self.iscale * self.params['weight_rho_to_pressure']
                                    + self.params['offset_pressure'] ) 
-                                * self.params['coeff_press'] * self.iscale )
+                                * self.params['coeff_press']  )
             if var == 'density':
                 if idx>=0:
                     data[var] = mean_meas[:,idx] * self.params['coeff_density'] * self.iscale
