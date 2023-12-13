@@ -12,7 +12,7 @@ def faces_to_vtkPolyData(coords,tri_elm,quad_elm):
     mesh.SetPoints(points)
 
     cells = vtk.vtkCellArray()
-    
+
     ntri = tri_elm.shape[0]
     nqua = quad_elm.shape[0]
     ncells = ntri+nqua
@@ -24,11 +24,11 @@ def faces_to_vtkPolyData(coords,tri_elm,quad_elm):
     faceIds = numpy_to_vtkIdTypeArray(faces, deep=1)
 
     cells.SetCells(ncells,faceIds)
-    
+
     mesh.SetPolys(cells)
-    
+
     return mesh
-    
+
 
 def cells_to_vtkUnstruct(coords,cell_elm):
     import numpy as np
@@ -46,21 +46,21 @@ def cells_to_vtkUnstruct(coords,cell_elm):
     mesh.SetPoints(points)
 
     cells = vtk.vtkCellArray()
-    
+
     ncells = cell_elm.shape[0]
 
     hexs =  np.c_[np.tile(8, ncells),cell_elm].flatten().astype(np.int64)
-    
+
     cell_type = vtk.vtkHexahedron().GetCellType()
     cell_types = np.tile(cell_type, (ncells, 1))
 
     cellIds = numpy_to_vtkIdTypeArray(hexs, deep=1)
 
     cells.SetCells(ncells,cellIds)
-    
+
     mesh.SetCells(cell_type,cells)
-    
-    return mesh    
+
+    return mesh
 
 def data_to_vtkBlock(mesh,data,vars):
 
@@ -72,7 +72,7 @@ def data_to_vtkBlock(mesh,data,vars):
     return mesh
 
 def save_polydata(polydata, file_name, binary=True, color_array_name=None):
-    
+
     writer = vtk.vtkXMLPolyDataWriter()
 
     writer.SetFileName(file_name)
@@ -84,13 +84,13 @@ def save_polydata(polydata, file_name, binary=True, color_array_name=None):
         writer.SetDataModeToBinary()
     else:
         writer.SetDataModeToAscii()
-            
+
     writer.Update()
     print('Writing file {0:s}'.format(file_name))
     writer.Write()
 
 def save_MultiBlock(struct_PolyData, outFile):
-    
+
     surface_names = struct_PolyData.keys()
     nb_blk = len(surface_names)
 
@@ -99,7 +99,7 @@ def save_MultiBlock(struct_PolyData, outFile):
 
     for i,surfn in enumerate(surface_names):
         mb.SetBlock(i, struct_PolyData[surfn])
-        mb.GetMetaData(i).Set(vtk.vtkCompositeDataSet.NAME(), surfn ) 
+        mb.GetMetaData(i).Set(vtk.vtkCompositeDataSet.NAME(), surfn )
 
     writer = vtk.vtkXMLMultiBlockDataWriter()
     writer.SetFileName(outFile)
@@ -107,27 +107,39 @@ def save_MultiBlock(struct_PolyData, outFile):
     writer.Write()
 
 def cut_by_plane(vtk_obj,origin=(0.,0.,0.),norm=(1.,0.,0.)):
-    
+
     plane = vtk.vtkPlane()
     plane.SetOrigin(origin[0],origin[1],origin[2])
     plane.SetNormal(norm[0],norm[1],norm[2])
-    
+
     planeCut = vtk.vtkCutter()
     planeCut.SetInputData(vtk_obj)
     planeCut.SetCutFunction(plane)
     planeCut.Update()
-    
+
     return planeCut.GetOutput()
-    
+
 def find_closest_point(vtk_obj,point=(0.,0.,0.)):
-    
+
     pointTree = vtk.vtkKdTreePointLocator()
     pointTree.SetDataSet(vtk_obj)
     pointTree.BuildLocator()
-    
+
     radius = None
     if radius is None:
         vtkId = pointTree.FindClosestPoint(point)
         pcoord = vtk_obj.GetPoint(vtkId)
-        
+
     return vtkId,pcoord
+
+
+def write_surface_mesh(file_name,coords,tri_elm,quad_elm,file_format='vtk'):
+    import meshio
+    import numpy as np
+
+    points = coords.astype(np.float64)
+    cells = [('triangle', tri_elm),('quad',quad_elm)]
+
+    surface_mesh = meshio.Mesh(points, cells)
+
+    meshio.write(file_name,surface_mesh,file_format=file_format)

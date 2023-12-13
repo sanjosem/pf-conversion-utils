@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python
 from importlib import reload  # If on Python 3
 
 import yaml
@@ -16,7 +16,7 @@ else:
     input_file = "../input_post_volume.yaml"
 
 if not os.path.exists(input_file):
-    print('Usage: script_clean_volume.py [input_post_volume.yaml]')
+    print('Usage: script_hdf5_volume.py [input_post_volume.yaml]')
     sys.exit('Input file \'{0:s}\' cannot be found'.format(input_file))
 
 fio = open(input_file,'r')
@@ -41,15 +41,38 @@ if not os.path.exists(fncfile):
 if 'casename' not in uinfo.keys():
     uinfo['casename'] = uinfo['fnc_filename'].replace('.fnc','')
 
-if 'verbose' in uinfo.keys():
-    fncConv = pft.fncConversion(fncfile,uinfo['verbose'])
+if 'fapi' in uinfo.keys():
+  fapi = uinfo['fapi']
 else:
-    fncConv = pft.fncConversion(fncfile)
-    
+  fapi = None
+
+if 'verbose' in uinfo.keys():
+    fncConv = pft.fncConversion(fncfile,uinfo['verbose'],use_fapi=fapi)
+else:
+    fncConv = pft.fncConversion(fncfile,use_fapi=fapi)
+
+
+if 'frame' in uinfo.keys():
+    frame_list = uinfo['frame']
+elif 'framelist' in uinfo.keys():
+    fl = uinfo['framelist']
+    frame_list = np.arange(fl['start'],fl['end'],fl['step'],dtype='i').tolist()
+else:
+    frame_list = [0,]
+
+
 fncConv.read_conversion_parameters()
 
-fncConv.read_volume_mesh()
+outFile = os.path.join(uinfo['output_directory'],'param_pf_{0:s}.hdf5'.format(uinfo['casename']))
 
-fncConv.read_frame_data(0)
+if os.path.isfile(outFile):
+    fncConv.load_parameters(outFile)
+else:
+    fncConv.read_volume_mesh()
+    outFile = fncConv.save_parameters(uinfo['casename'],uinfo['output_directory'])
 
-fncConv.save_vtk(uinfo['casename'],uinfo['output_directory'])
+print(f'Frame to extract: {frame_list}')
+
+for frame_number in frame_list:
+    fncConv.read_frame_data(frame_number)
+    fncConv.save_instant(outFile,frame_number)
