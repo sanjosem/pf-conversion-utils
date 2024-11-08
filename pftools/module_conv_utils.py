@@ -125,9 +125,9 @@ class PFConversion:
             rotation_axis = f.variables['lrf_axis_direction'][0,:]  # axe de rotation
             axis_index = where(rotation_axis)[0][0]
             sign_rotation = rotation_axis[axis_index]
-            if abs(sign_rotation)<1:
-                print('Rotation axis',rotation_axis)
-                raise NotImplementedError('Class only support principal axis for rotating')
+            #if abs(sign_rotation)<1:
+            #    print('Rotation axis',rotation_axis)
+            #    raise NotImplementedError('Class only support principal axis for rotating')
             self.params['axis'] = 'xyz'[axis_index]
             self.params['iaxis'] = axis_index
 
