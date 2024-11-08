@@ -62,7 +62,11 @@ for fl in liste:
     for idim,coor in enumerate(['xc','yc','zc']):
         probe_info[coor].append(center[idim])
 
-    pncConv.export_temporal_data(casename,uinfo['output_directory'],delimiter=uinfo['delimiter'])
+    if 'extension' in uinfo.keys():
+      pncConv.export_temporal_data(casename,uinfo['output_directory'],delimiter=uinfo['delimiter'],
+                                   extension=uinfo['extension'])
+    else:
+      pncConv.export_temporal_data(casename,uinfo['output_directory'],delimiter=uinfo['delimiter'])
     
 DataFrame(probe_info).to_csv(os.path.join(uinfo['output_directory'],'probe_info.csv'))
 if 'verbose' in uinfo.keys():
